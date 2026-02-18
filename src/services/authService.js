@@ -11,6 +11,7 @@ import { sessionStorage } from '../utils/storage';
 export const authService = {
   /**
    * Login with email/phone and password
+   * Matches cric-scorer-ui login implementation
    * @param {string} username - Email or phone number
    * @param {string} password - User password
    * @returns {Promise<Object>} - User data and tokens
@@ -22,17 +23,34 @@ export const authService = {
         password,
       });
 
-      // Store tokens
-      if (response.access_token) {
+      // API returns structure: { data: { token: {...}, user: {...} } }
+      // Similar to cric-scorer-ui: response.data.data
+      const sessionData = response.data || response;
+      
+      // Extract token information
+      // In cric-scorer-ui format: sessionData.token = { token_type, access_token, refresh_token }
+      if (sessionData.token) {
         await sessionStorage.setTokens(
-          response.access_token,
-          response.refresh_token,
-          response.token_type || 'Bearer'
+          sessionData.token.access_token,
+          sessionData.token.refresh_token,
+          sessionData.token.token_type || 'Bearer'
         );
       }
+      // Fallback for direct token format
+      else if (sessionData.access_token) {
+        await sessionStorage.setTokens(
+          sessionData.access_token,
+          sessionData.refresh_token,
+          sessionData.token_type || 'Bearer'
+        );
+      }
+      
+      // Store complete session data (similar to Storage.setLocal("session", apiResponse.data))
+      await sessionStorage.setSessionData(sessionData);
 
-      return response;
+      return sessionData;
     } catch (error) {
+      // Pass through the detailed error message from api.js
       throw error;
     }
   },
@@ -72,15 +90,19 @@ export const authService = {
         refresh_token: refreshToken,
       });
 
-      if (response.access_token) {
+      // Handle nested response structure
+      const sessionData = response.data || response;
+
+      if (sessionData.access_token) {
         await sessionStorage.setTokens(
-          response.access_token,
-          response.refresh_token,
-          response.token_type
+          sessionData.access_token,
+          sessionData.refresh_token,
+          sessionData.token_type
         );
+        await sessionStorage.setSessionData(sessionData);
       }
 
-      return response;
+      return sessionData;
     } catch (error) {
       await sessionStorage.clearTokens();
       throw error;

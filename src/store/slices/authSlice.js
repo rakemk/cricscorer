@@ -10,7 +10,9 @@ export const login = createAsyncThunk(
       const response = await authService.login(username, password);
       return response;
     } catch (error) {
-      return rejectWithValue(error.message || 'Login failed');
+      // Handle both Error objects and error response objects
+      const errorMessage = error.message || error.error || 'Invalid Email or Password';
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -39,6 +41,7 @@ export const checkAuthStatus = createAsyncThunk(
 const initialState = {
   isAuthenticated: false,
   user: null,
+  session: null, // Complete session data from API
   tokens: null,
   loading: false,
   error: null,
@@ -66,10 +69,16 @@ const authSlice = createSlice({
       .addCase(login.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
+        state.session = action.payload; // Store complete session data
         state.user = action.payload.user || action.payload;
+        
+        // Handle nested token structure from cric-scorer-ui API
+        // Response format: { token: { access_token, refresh_token, token_type }, user: {...} }
+        const tokenData = action.payload.token || action.payload;
         state.tokens = {
-          accessToken: action.payload.access_token,
-          refreshToken: action.payload.refresh_token,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          tokenType: tokenData.token_type || 'Bearer',
         };
       })
       .addCase(login.rejected, (state, action) => {
@@ -81,6 +90,7 @@ const authSlice = createSlice({
       .addCase(logout.fulfilled, (state) => {
         state.isAuthenticated = false;
         state.user = null;
+        state.session = null;
         state.tokens = null;
       })
       // Check auth status

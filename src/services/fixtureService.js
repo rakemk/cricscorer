@@ -1,39 +1,134 @@
 import { apiService } from './api';
 import { ENDPOINTS } from '../constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Fixture Service
  * Handles tournament and fixture list operations
- * Replaces fixtureService.js
+ * Matches cric-scorer-ui fixtureService.js with caching support
  */
+
+const STORAGE_KEYS = {
+  TOURNAMENTS: '@tournaments',
+  SELECTED_TOURNAMENT: '@selected_tournament',
+  FIXTURES: '@fixtures_',
+};
 
 export const fixtureService = {
   /**
-   * Get list of all tournaments
+   * Get list of all tournaments with caching
+   * Matches: getTournamentListAPI()
+   * @param {boolean} forceRefresh - Force API call, skip cache
    * @returns {Promise<Array>} - List of tournaments
    */
-  async getTournamentList() {
+  async getTournamentList(forceRefresh = false) {
     try {
+      // Try cache first unless forced
+      if (!forceRefresh) {
+        const cached = await AsyncStorage.getItem(STORAGE_KEYS.TOURNAMENTS);
+        if (cached) {
+          const tournaments = JSON.parse(cached);
+          // Refresh in background
+          this.refreshTournamentsBackground();
+          return tournaments;
+        }
+      }
+
       const response = await apiService.get(ENDPOINTS.TOURNAMENT.LIST);
-      return response.data || response;
+      const tournaments = response.data || response;
+      
+      // Cache results
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.TOURNAMENTS,
+        JSON.stringify(tournaments)
+      );
+      
+      return tournaments;
     } catch (error) {
+      // Try to return cached data on error
+      const cached = await AsyncStorage.getItem(STORAGE_KEYS.TOURNAMENTS);
+      if (cached) {
+        console.warn('Using cached tournaments due to error:', error.message);
+        return JSON.parse(cached);
+      }
       throw error;
     }
   },
 
   /**
-   * Get fixtures for a specific tournament
+   * Background refresh for tournaments
+   * @private
+   */
+  async refreshTournamentsBackground() {
+    try {
+      const response = await apiService.get(ENDPOINTS.TOURNAMENT.LIST);
+      const tournaments = response.data || response;
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.TOURNAMENTS,
+        JSON.stringify(tournaments)
+      );
+    } catch (error) {
+      console.warn('Background tournament refresh failed:', error.message);
+    }
+  },
+
+  /**
+   * Get fixtures for a specific tournament with caching
+   * Matches: getFixtureListAPI(tournament)
    * @param {string|number} tournamentId - Tournament ID
+   * @param {boolean} forceRefresh - Force API call, skip cache
    * @returns {Promise<Array>} - List of fixtures
    */
-  async getFixtureList(tournamentId) {
+  async getFixtureList(tournamentId, forceRefresh = false) {
+    try {
+      const cacheKey = STORAGE_KEYS.FIXTURES + tournamentId;
+      
+      // Try cache first unless forced
+      if (!forceRefresh) {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          const fixtures = JSON.parse(cached);
+          // Refresh in background
+          this.refreshFixturesBackground(tournamentId);
+          return fixtures;
+        }
+      }
+
+      const response = await apiService.get(
+        ENDPOINTS.TOURNAMENT.FIXTURE_LIST(tournamentId)
+      );
+      const fixtures = response.data || response;
+      
+      // Cache results
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(fixtures));
+      
+      return fixtures;
+    } catch (error) {
+      // Try to return cached data on error
+      const cacheKey = STORAGE_KEYS.FIXTURES + tournamentId;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        console.warn('Using cached fixtures due to error:', error.message);
+        return JSON.parse(cached);
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Background refresh for fixtures
+   * @private
+   */
+  async refreshFixturesBackground(tournamentId) {
     try {
       const response = await apiService.get(
         ENDPOINTS.TOURNAMENT.FIXTURE_LIST(tournamentId)
       );
-      return response.data || response;
+      const fixtures = response.data || response;
+      const cacheKey = STORAGE_KEYS.FIXTURES + tournamentId;
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(fixtures));
     } catch (error) {
-      throw error;
+      console.warn('Background fixture refresh failed:', error.message);
     }
   },
 
@@ -50,6 +145,59 @@ export const fixtureService = {
       return response.data || response;
     } catch (error) {
       throw error;
+    }
+  },
+
+  /**
+   * Set/Store selected tournament
+   * Matches: setSelectedTournament(tournament)
+   * @param {Object} tournament - Tournament object
+   */
+  async setSelectedTournament(tournament) {
+    try {
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.SELECTED_TOURNAMENT,
+        JSON.stringify(tournament)
+      );
+    } catch (error) {
+      console.error('Error saving selected tournament:', error);
+    }
+  },
+
+  /**
+   * Get selected tournament
+   * Matches: getSelectedTournament()
+   * @returns {Promise<Object|null>} - Selected tournament or null
+   */
+  async getSelectedTournament() {
+    try {
+      const cached = await AsyncStorage.getItem(STORAGE_KEYS.SELECTED_TOURNAMENT);
+      return cached ? JSON.parse(cached) : null;
+    } catch (error) {
+      console.error('Error getting selected tournament:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Clear all cached fixture data
+   * Matches: clearStorage()
+   */
+  async clearStorage() {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.TOURNAMENTS);
+      await AsyncStorage.removeItem(STORAGE_KEYS.SELECTED_TOURNAMENT);
+      
+      // Clear all fixture caches (by pattern)
+      const keys = await AsyncStorage.getAllKeys();
+      const fixtureCacheKeys = keys.filter(key => 
+        key.startsWith(STORAGE_KEYS.FIXTURES)
+      );
+      if (fixtureCacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(fixtureCacheKeys);
+      }
+    } catch (error) {
+      console.error('Error clearing fixture storage:', error);
     }
   },
 

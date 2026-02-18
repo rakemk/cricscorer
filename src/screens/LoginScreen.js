@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Platform,
   ActivityIndicator,
   Image,
+  Alert,
+  ScrollView,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { login, clearError } from '../store/slices/authSlice';
@@ -18,15 +20,22 @@ const LoginScreen = () => {
   const dispatch = useDispatch();
   const { loading, error } = useSelector((state) => state.auth);
 
-  const [username, setUsername] = useState('');
+  const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = () => {
-    if (!username.trim() || !password.trim()) {
+    // Validation similar to cric-scorer-ui
+    if (!emailOrPhone.trim()) {
+      Alert.alert('Validation Error', 'Email or Phone cannot be blank');
       return;
     }
-    dispatch(login({ username: username.trim(), password }));
+    
+    if (!password.trim()) {
+      Alert.alert('Validation Error', 'Password cannot be blank');
+      return;
+    }
+    
+    dispatch(login({ username: emailOrPhone.trim(), password }));
   };
 
   const handleInputChange = () => {
@@ -35,104 +44,82 @@ const LoginScreen = () => {
     }
   };
 
+  // Show error alert similar to toastr.error
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Login Error', error);
+    }
+  }, [error]);
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
-        {/* Logo/Title Section */}
-        <View style={styles.headerSection}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Logo Section - Similar to cric-scorer-ui */}
+        <View style={styles.logoSection}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>🏏</Text>
+            <Text style={styles.logoEmoji}>🏏</Text>
           </View>
-          <Text style={styles.title}>Cric Scorer</Text>
-          <Text style={styles.subtitle}>Cricket Scoring App</Text>
+          <Text style={styles.logoText}>ProCric8</Text>
         </View>
 
-        {/* Login Form */}
-        <View style={styles.formContainer}>
-          <Text style={styles.formTitle}>Login</Text>
-
-          {/* Error Message */}
-          {error && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
-
-          {/* Username Input */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Email / Phone</Text>
+        {/* Login Form - Centered like cric-scorer-ui */}
+        <View style={styles.formWrapper}>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Email/Phone</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter email or phone"
-              placeholderTextColor={COLORS.textLight}
-              value={username}
+              placeholderTextColor="#999"
+              value={emailOrPhone}
               onChangeText={(text) => {
-                setUsername(text);
+                setEmailOrPhone(text);
                 handleInputChange();
               }}
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="email-address"
               editable={!loading}
             />
           </View>
 
-          {/* Password Input */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="Enter password"
-                placeholderTextColor={COLORS.textLight}
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  handleInputChange();
-                }}
-                secureTextEntry={!showPassword}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter password"
+              placeholderTextColor="#999"
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                handleInputChange();
+              }}
+              secureTextEntry={true}
+              editable={!loading}
+            />
           </View>
 
-          {/* Login Button */}
+          {/* Login Button - Green like cric-scorer-ui */}
           <TouchableOpacity
             style={[
               styles.loginButton,
-              (!username.trim() || !password.trim() || loading) &&
-                styles.loginButtonDisabled,
+              loading && styles.loginButtonDisabled,
             ]}
             onPress={handleLogin}
-            disabled={!username.trim() || !password.trim() || loading}
+            disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color={COLORS.white} />
+              <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text style={styles.loginButtonText}>Login</Text>
             )}
           </TouchableOpacity>
-
-          {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
         </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Cricket Scoring Made Easy</Text>
-        </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -140,138 +127,76 @@ const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffffff',
   },
-  content: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: SPACING.xl,
-  },
-  headerSection: {
     alignItems: 'center',
-    marginBottom: SPACING.xxl,
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+  },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: 50,
   },
   logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: COLORS.primary,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.md,
-    ...SHADOWS.lg,
+    marginBottom: 15,
+  },
+  logoEmoji: {
+    fontSize: 50,
   },
   logoText: {
-    fontSize: 40,
-  },
-  title: {
-    fontSize: FONTS.sizes.hero,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
+    color: '#333',
   },
-  subtitle: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+  formWrapper: {
+    width: '100%',
+    maxWidth: 400,
   },
-  formContainer: {
-    backgroundColor: COLORS.card,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.xl,
-    ...SHADOWS.md,
+  formGroup: {
+    marginBottom: 20,
   },
-  formTitle: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SPACING.lg,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: COLORS.danger,
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  errorText: {
-    color: COLORS.danger,
-    fontSize: FONTS.sizes.sm,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: SPACING.lg,
-  },
-  inputLabel: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
+  label: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#333',
+    marginBottom: 5,
   },
   input: {
-    backgroundColor: COLORS.background,
+    width: '100%',
+    height: 50,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    fontSize: FONTS.sizes.md,
-    color: COLORS.text,
-  },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.md,
-  },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    fontSize: FONTS.sizes.md,
-    color: COLORS.text,
-  },
-  eyeButton: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-  },
-  eyeIcon: {
-    fontSize: 18,
+    borderColor: '#ccc',
+    borderRadius: 4,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    color: '#333',
   },
   loginButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.md,
+    width: '100%',
+    height: 50,
+    backgroundColor: '#4CAF50', // Green color like cric-scorer-ui
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: SPACING.sm,
-    ...SHADOWS.sm,
+    borderRadius: 4,
+    marginTop: 10,
   },
   loginButtonDisabled: {
-    backgroundColor: COLORS.textLight,
+    backgroundColor: '#9E9E9E',
   },
   loginButtonText: {
-    color: COLORS.white,
-    fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
-  },
-  forgotPassword: {
-    alignItems: 'center',
-    marginTop: SPACING.lg,
-  },
-  forgotPasswordText: {
-    color: COLORS.primary,
-    fontSize: FONTS.sizes.sm,
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: SPACING.xxl,
-  },
-  footerText: {
-    color: COLORS.textSecondary,
-    fontSize: FONTS.sizes.sm,
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
 

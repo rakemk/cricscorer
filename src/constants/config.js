@@ -1,8 +1,41 @@
+import { Platform } from 'react-native';
+
 // API Configuration - Based on UrlService.js
+// ==========================================
+// ⚠️ IMPORTANT: You need a backend API server running
+// ==========================================
+
+// API Server URLs for different environments
+const API_URLS = {
+  // Production API - ProCric8 (from cric-scorer-ui)
+  production: 'https://api.procric8.com',
+  
+  // Local development server
+  // For Android Emulator, use 10.0.2.2 to access host machine's localhost
+  // For iOS Simulator, use localhost
+  // For physical device, use your computer's IP address (e.g., 192.168.1.10)
+  development: Platform.select({
+    android: 'http://10.0.2.2:3000', // Android Emulator -> Host localhost:3000
+    ios: 'http://localhost:3000',    // iOS Simulator -> localhost:3000
+    default: 'http://localhost:3000',
+  }),
+  
+  // Mock/Test Mode (no backend needed - for testing UI only)
+  mock: 'http://mock-api', // Will use mock data
+};
+
+// Current environment - Change this to switch between environments
+// Options: 'production', 'development', 'mock'
+// ✅ USING PRODUCTION API - Real ProCric8 API server
+const CURRENT_ENV = 'production';
+
 export const API_CONFIG = {
-  BASE_URL: 'https://api.cricscore.com', // Replace with actual API URL
+  BASE_URL: API_URLS[CURRENT_ENV],
   API_VERSION: 'v2',
   TIMEOUT: 30000,
+  DEBUG: true, // Set to false in production
+  CURRENT_ENV,
+  USE_MOCK: CURRENT_ENV === 'mock', // Enable mock mode
 };
 
 // Endpoints matching UrlService.js
@@ -116,6 +149,7 @@ export const STORAGE_KEYS = {
   REFRESH_TOKEN: 'refresh_token',
   TOKEN_TYPE: 'token_type',
   USER_DATA: 'user_data',
+  SESSION: 'session', // Complete session data from API
   SELECTED_TOURNAMENT: 'selected_tournament',
   SELECTED_FIXTURE: 'selected_fixture',
   MATCH_SETTINGS: 'match_settings',

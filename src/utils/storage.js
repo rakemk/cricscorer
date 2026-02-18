@@ -148,11 +148,39 @@ export const sessionStorage = {
       storage.remove(STORAGE_KEYS.REFRESH_TOKEN),
       storage.remove(STORAGE_KEYS.TOKEN_TYPE),
       storage.remove(STORAGE_KEYS.USER_DATA),
+      storage.remove(STORAGE_KEYS.SESSION),
     ]);
   },
 
   async getAccessToken() {
     return storage.get(STORAGE_KEYS.ACCESS_TOKEN, false);
+  },
+
+  async getRefreshToken() {
+    return storage.get(STORAGE_KEYS.REFRESH_TOKEN, false);
+  },
+
+  async getTokenType() {
+    const tokenType = await storage.get(STORAGE_KEYS.TOKEN_TYPE, false);
+    return tokenType || 'Bearer';
+  },
+
+  async setSessionData(sessionData) {
+    await storage.set(STORAGE_KEYS.SESSION, sessionData);
+  },
+
+  async getSessionData() {
+    return storage.get(STORAGE_KEYS.SESSION);
+  },
+
+  // Get full authorization token format: "Bearer xyz"
+  async getAuthorizationToken() {
+    const tokenType = await this.getTokenType();
+    const accessToken = await this.getAccessToken();
+    if (accessToken) {
+      return `${tokenType} ${accessToken}`;
+    }
+    return null;
   },
 };
 
