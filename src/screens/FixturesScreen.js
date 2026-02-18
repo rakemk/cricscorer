@@ -85,6 +85,8 @@ const FixturesScreen = ({ navigation }) => {
   };
 
   const getStatusText = (status) => {
+    if (!status) return 'UPCOMING';
+    
     switch (status) {
       case MATCH_STATUS.LIVE:
         return 'LIVE';

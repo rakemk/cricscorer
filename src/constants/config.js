@@ -26,8 +26,8 @@ const API_URLS = {
 
 // Current environment - Change this to switch between environments
 // Options: 'production', 'development', 'mock'
-// ✅ USING PRODUCTION API - Real ProCric8 API server
-const CURRENT_ENV = 'production';
+// ⚠️ TEMPORARILY USING MOCK MODE - Waiting for correct API URL from cric-scorer-ui
+const CURRENT_ENV = 'mock';
 
 export const API_CONFIG = {
   BASE_URL: API_URLS[CURRENT_ENV],
