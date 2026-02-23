@@ -24,6 +24,28 @@ export const matchService = {
   },
 
   /**
+   * Get comprehensive match score data (for viewing live/completed matches)
+   * Includes summary, innings data, and full match details
+   * @param {string|number} matchId - Match ID
+   * @returns {Promise<Object>} - Match score data with summary and innings
+   */
+  async getMatchScore(matchId) {
+    try {
+      console.log('🔵 Fetching match score from:', ENDPOINTS.MATCH.SCORE(matchId));
+      const response = await apiService.get(ENDPOINTS.MATCH.SCORE(matchId));
+      console.log('🔵 Match score response:', {
+        hasData: !!response.data,
+        hasSummary: !!response.data?.summary,
+        matchStatus: response.data?.summary?.matchStatus,
+      });
+      return response.data || response;
+    } catch (error) {
+      console.error('❌ Failed to fetch match score:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Get match settings
    * @param {string|number} matchId - Match ID
    * @returns {Promise<Object>} - Match settings

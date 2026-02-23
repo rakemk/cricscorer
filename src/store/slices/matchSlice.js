@@ -15,6 +15,18 @@ export const fetchMatch = createAsyncThunk(
   }
 );
 
+export const fetchMatchScore = createAsyncThunk(
+  'match/fetchMatchScore',
+  async (matchId, { rejectWithValue }) => {
+    try {
+      const response = await matchService.getMatchScore(matchId);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Failed to fetch match score');
+    }
+  }
+);
+
 export const fetchMatchSettings = createAsyncThunk(
   'match/fetchSettings',
   async (matchId, { rejectWithValue }) => {
@@ -77,6 +89,7 @@ export const saveToss = createAsyncThunk(
 
 const initialState = {
   match: null,
+  matchSummary: null, // Comprehensive match summary from SCORE endpoint
   settings: DEFAULT_MATCH_SETTINGS,
   tourSquad: {
     team1: [],
@@ -161,6 +174,23 @@ const matchSlice = createSlice({
         state.match = action.payload;
       })
       .addCase(fetchMatch.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Fetch Match Score (comprehensive view data)
+      .addCase(fetchMatchScore.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchMatchScore.fulfilled, (state, action) => {
+        state.loading = false;
+        state.match = action.payload;
+        // Store summary data separately if needed
+        if (action.payload.summary) {
+          state.matchSummary = action.payload.summary;
+        }
+      })
+      .addCase(fetchMatchScore.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

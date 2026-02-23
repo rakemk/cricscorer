@@ -7,7 +7,15 @@ export const login = createAsyncThunk(
   'auth/login',
   async ({ username, password }, { rejectWithValue }) => {
     try {
-      const response = await authService.login(username, password);
+      // Step 1: Verify identity and get UUID
+      const identityResult = await authService.verifyIdentity(username);
+      
+      if (!identityResult.validIdentity) {
+        return rejectWithValue('Invalid phone number or email');
+      }
+
+      // Step 2: Login with UUID and password
+      const response = await authService.login(identityResult.uuid, password);
       return response;
     } catch (error) {
       // Handle both Error objects and error response objects
@@ -70,15 +78,14 @@ const authSlice = createSlice({
         state.loading = false;
         state.isAuthenticated = true;
         state.session = action.payload; // Store complete session data
-        state.user = action.payload.user || action.payload;
+        state.user = action.payload.user || null;
         
-        // Handle nested token structure from cric-scorer-ui API
-        // Response format: { token: { access_token, refresh_token, token_type }, user: {...} }
-        const tokenData = action.payload.token || action.payload;
+        // Handle new API token structure
+        // Response format: { tokenType, token, user }
         state.tokens = {
-          accessToken: tokenData.access_token,
-          refreshToken: tokenData.refresh_token,
-          tokenType: tokenData.token_type || 'Bearer',
+          accessToken: action.payload.token,
+          refreshToken: null,
+          tokenType: action.payload.tokenType || 'Bearer',
         };
       })
       .addCase(login.rejected, (state, action) => {

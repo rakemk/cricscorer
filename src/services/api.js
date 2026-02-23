@@ -19,17 +19,20 @@ const api = axios.create({
 
 // Debug logging
 if (API_CONFIG.DEBUG) {
+  console.log('');
   console.log('='.repeat(60));
-  console.log('API Configuration:');
+  console.log('🚀 API SERVICE INITIALIZED');
+  console.log('='.repeat(60));
   console.log('  Environment:', API_CONFIG.CURRENT_ENV);
   console.log('  Base URL:', API_CONFIG.BASE_URL);
   console.log('  Platform:', require('react-native').Platform.OS);
-  console.log('  Mock Mode:', API_CONFIG.USE_MOCK ? 'ENABLED ✅' : 'DISABLED');
+  console.log('  Mock Mode:', API_CONFIG.USE_MOCK ? 'ENABLED ✅' : 'DISABLED ❌');
+  console.log('  Debug Mode:', API_CONFIG.DEBUG ? 'ENABLED ✅' : 'DISABLED ❌');
   console.log('='.repeat(60));
+  console.log('');
   
   if (API_CONFIG.USE_MOCK) {
-    console.log('');
-    console.log('🔶 Mock API Mode Active');
+    console.log('🔶 MOCK API MODE ACTIVE');
     console.log('   Using fake data - no backend server needed');
     console.log('   Test credentials: username=333, password=1234');
     console.log('');
@@ -48,20 +51,23 @@ api.interceptors.request.use(
     
     // Debug logging
     if (API_CONFIG.DEBUG) {
-      console.log('API Request:', {
-        method: config.method?.toUpperCase(),
-        url: config.url,
-        fullURL: config.baseURL + config.url,
-        data: config.data,
-        hasAuth: !!authToken,
-      });
+      console.log('');
+      console.log('📤 API REQUEST:');
+      console.log('   Method:', config.method?.toUpperCase());
+      console.log('   Endpoint:', config.url);
+      console.log('   Full URL:', config.baseURL + config.url);
+      console.log('   Has Auth:', !!authToken ? '✅' : '❌');
+      if (config.data) {
+        console.log('   Data:', JSON.stringify(config.data).substring(0, 100));
+      }
+      console.log('');
     }
     
     return config;
   },
   (error) => {
     if (API_CONFIG.DEBUG) {
-      console.error('Request Error:', error);
+      console.error('❌ REQUEST ERROR:', error.message);
     }
     return Promise.reject(error);
   }
@@ -70,6 +76,16 @@ api.interceptors.request.use(
 // Response interceptor - Handle errors
 api.interceptors.response.use(
   (response) => {
+    // Debug logging for successful responses
+    if (API_CONFIG.DEBUG) {
+      console.log('');
+      console.log('✅ API RESPONSE:');
+      console.log('   URL:', response.config?.url);
+      console.log('   Status:', response.status);
+      console.log('   Data:', JSON.stringify(response.data).substring(0, 100) + '...');
+      console.log('');
+    }
+    
     // Return data directly for convenience
     // API returns: { status: 200, data: { data: {...} } }
     // We return response.data so consumers can access response.data.data if needed
@@ -147,13 +163,13 @@ api.interceptors.response.use(
     
     // Debug logging
     if (API_CONFIG.DEBUG) {
-      console.error('API Error:', {
-        url: error.config?.url,
-        method: error.config?.method,
-        status: error.response?.status,
-        message: errorMessage,
-        fullError: error,
-      });
+      console.log('');
+      console.log('❌ API ERROR:');
+      console.log('   URL:', error.config?.url);
+      console.log('   Method:', error.config?.method?.toUpperCase());
+      console.log('   Status:', error.response?.status || 'No Response');
+      console.log('   Message:', errorMessage);
+      console.log('');
     }
 
     return Promise.reject(errorResponse);

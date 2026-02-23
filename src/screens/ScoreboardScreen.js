@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  Text,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
@@ -34,7 +35,7 @@ import {
   selectNonStrikerStats,
   selectCurrentBowlerStats,
 } from '../store/slices/scoringSlice';
-import { fetchMatch } from '../store/slices/matchSlice';
+import { fetchMatch, fetchMatchScore } from '../store/slices/matchSlice';
 import { scoringService } from '../services';
 import { COLORS, SPACING, BALL_TYPES } from '../constants';
 
@@ -43,7 +44,7 @@ const ScoreboardScreen = ({ navigation, route }) => {
   const dispatch = useDispatch();
 
   // Match state
-  const { match, settings, selectedSquad, toss } = useSelector(
+  const { match, matchSummary, settings, selectedSquad, toss } = useSelector(
     (state) => state.match
   );
 
@@ -93,11 +94,16 @@ const ScoreboardScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (matchId) {
-      dispatch(fetchMatch(matchId));
-      dispatch(fetchInningsData(matchId));
-      dispatch(fetchBallData({ matchId, innings: currentInnings }));
+      console.log('🏏 Loading match score for matchId:', matchId);
+      // Use the comprehensive score endpoint instead of separate calls
+      dispatch(fetchMatchScore(matchId));
+      
+      // Note: Commenting out individual API calls that don't exist
+      // dispatch(fetchMatch(matchId));
+      // dispatch(fetchInningsData(matchId));
+      // dispatch(fetchBallData({ matchId, innings: currentInnings }));
     }
-  }, [matchId, dispatch, currentInnings]);
+  }, [matchId, dispatch]);
 
   // Handle scoring a ball
   const handleScore = useCallback(
@@ -246,7 +252,7 @@ const ScoreboardScreen = ({ navigation, route }) => {
   ).length;
   const canEndOver = legalBallsInOver >= 6;
 
-  if (loading && !match) {
+  if (loading && !match && !matchSummary) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -254,6 +260,254 @@ const ScoreboardScreen = ({ navigation, route }) => {
     );
   }
 
+  // View Mode - Display match score data from API
+  if (matchSummary) {
+    const innings1 = match?.inning1;
+    const innings2 = match?.inning2;
+    
+    console.log('📊 Match data structure:', {
+      hasMatch: !!match,
+      hasInning1: !!innings1,
+      hasInning2: !!innings2,
+      inning1Keys: innings1 ? Object.keys(innings1) : [],
+      inning2Keys: innings2 ? Object.keys(innings2) : [],
+    });
+    
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Match Header */}
+          <View style={styles.matchHeader}>
+            <Text style={styles.matchTitle}>
+              {matchSummary.teamName1} vs {matchSummary.teamName2}
+            </Text>
+            <View style={[
+              styles.statusBadge,
+              { backgroundColor: matchSummary.matchStatus === 'LIVE' ? COLORS.live : COLORS.completed }
+            ]}>
+              <Text style={styles.statusText}>{matchSummary.matchStatus}</Text>
+            </View>
+          </View>
+
+          {/* Match Summary */}
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryText}>{matchSummary.matchSummary}</Text>
+            {matchSummary.tossDetails && (
+              <Text style={styles.tossText}>{matchSummary.tossDetails}</Text>
+            )}
+          </View>
+
+          {/* Team 1 Score */}
+          <View style={styles.teamScoreCard}>
+            <View style={styles.teamHeader}>
+              <Text style={styles.teamName}>{matchSummary.teamName1}</Text>
+              <Text style={styles.teamScore}>
+                {matchSummary.teamScore1} {matchSummary.teamOver1}
+              </Text>
+            </View>
+            {matchSummary.crr1 > 0 && (
+              <Text style={styles.runRateText}>Run Rate: {matchSummary.crr1.toFixed(2)}</Text>
+            )}
+            {matchSummary.teamExtraDet1 && (
+              <Text style={styles.extrasText}>Extras: {matchSummary.teamExtraDet1}</Text>
+            )}
+          </View>
+
+          {/* Innings 1 - Batsmen */}
+          {innings1?.batsman && innings1.batsman.length > 0 && (
+            <View style={styles.inningsSection}>
+              <Text style={styles.inningsSectionTitle}>
+                {matchSummary.teamName1} - Batting
+              </Text>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderText, { flex: 2 }]}>Batsman</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>R</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>B</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>4s</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>6s</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>SR</Text>
+              </View>
+              {innings1.batsman.map((bat, index) => (
+                <View key={bat.batsmanId || index} style={styles.tableRow}>
+                  <View style={{ flex: 2 }}>
+                    <Text style={styles.playerName}>{bat.batsmanName}</Text>
+                    {bat.outDetail && (
+                      <Text style={styles.outDetail}>{bat.outDetail}</Text>
+                    )}
+                  </View>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bat.runs}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bat.balls}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bat.runs4}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bat.runs6}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bat.strikeRate?.toFixed(0)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Innings 1 - Bowlers */}
+          {innings1?.bowler && innings1.bowler.length > 0 && (
+            <View style={styles.inningsSection}>
+              <Text style={styles.inningsSectionTitle}>
+                {matchSummary.teamName2} - Bowling
+              </Text>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderText, { flex: 2 }]}>Bowler</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>O</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>R</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>W</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>Econ</Text>
+              </View>
+              {innings1.bowler.map((bowl, index) => (
+                <View key={bowl.bowlerId || index} style={styles.tableRow}>
+                  <Text style={[styles.playerName, { flex: 2 }]}>{bowl.bowlerName}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.overs}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.runs}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.wicket}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.econ?.toFixed(1)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Innings 1 - Fall of Wickets */}
+          {innings1?.fow && innings1.fow.length > 0 && (
+            <View style={styles.inningsSection}>
+              <Text style={styles.inningsSectionTitle}>Fall of Wickets</Text>
+              <View style={styles.fowContainer}>
+                {innings1.fow.map((f, index) => (
+                  <Text key={index} style={styles.fowText}>
+                    {f.fow}
+                  </Text>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Team 2 Score */}
+          {matchSummary.teamScore2 && (
+            <>
+              <View style={styles.teamScoreCard}>
+                <View style={styles.teamHeader}>
+                  <Text style={styles.teamName}>{matchSummary.teamName2}</Text>
+                  <Text style={styles.teamScore}>
+                    {matchSummary.teamScore2} {matchSummary.teamOver2}
+                  </Text>
+                </View>
+                {matchSummary.crr2 > 0 && (
+                  <View style={styles.runRateRow}>
+                    <Text style={styles.runRateText}>Run Rate: {matchSummary.crr2.toFixed(2)}</Text>
+                    {matchSummary.target > 0 && matchSummary.matchStatus === 'LIVE' && (
+                      <Text style={styles.requiredRrText}>
+                        Required RR: {matchSummary.requiredRr.toFixed(2)}
+                      </Text>
+                    )}
+                  </View>
+                )}
+                {matchSummary.teamExtraDet2 && (
+                  <Text style={styles.extrasText}>Extras: {matchSummary.teamExtraDet2}</Text>
+                )}
+              </View>
+
+              {/* Innings 2 - Batsmen */}
+              {innings2?.batsman && innings2.batsman.length > 0 && (
+                <View style={styles.inningsSection}>
+                  <Text style={styles.inningsSectionTitle}>
+                    {matchSummary.teamName2} - Batting
+                  </Text>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>Batsman</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>R</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>B</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>4s</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>6s</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>SR</Text>
+                  </View>
+                  {innings2.batsman.map((bat, index) => (
+                    <View key={bat.batsmanId || index} style={styles.tableRow}>
+                      <View style={{ flex: 2 }}>
+                        <Text style={styles.playerName}>{bat.batsmanName}</Text>
+                        {bat.outDetail && (
+                          <Text style={styles.outDetail}>{bat.outDetail}</Text>
+                        )}
+                      </View>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bat.runs}</Text>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bat.balls}</Text>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bat.runs4}</Text>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bat.runs6}</Text>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bat.strikeRate?.toFixed(0)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Innings 2 - Bowlers */}
+              {innings2?.bowler && innings2.bowler.length > 0 && (
+                <View style={styles.inningsSection}>
+                  <Text style={styles.inningsSectionTitle}>
+                    {matchSummary.teamName1} - Bowling
+                  </Text>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>Bowler</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>O</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>R</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>W</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>Econ</Text>
+                  </View>
+                  {innings2.bowler.map((bowl, index) => (
+                    <View key={bowl.bowlerId || index} style={styles.tableRow}>
+                      <Text style={[styles.playerName, { flex: 2 }]}>{bowl.bowlerName}</Text>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.overs}</Text>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.runs}</Text>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.wicket}</Text>
+                      <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.econ?.toFixed(1)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Innings 2 - Fall of Wickets */}
+              {innings2?.fow && innings2.fow.length > 0 && (
+                <View style={styles.inningsSection}>
+                  <Text style={styles.inningsSectionTitle}>Fall of Wickets</Text>
+                  <View style={styles.fowContainer}>
+                    {innings2.fow.map((f, index) => (
+                      <Text key={index} style={styles.fowText}>
+                        {f.fow}
+                      </Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* Target Info */}
+          {matchSummary.target > 0 && (
+            <View style={styles.targetCard}>
+              <Text style={styles.targetText}>Target: {matchSummary.target}</Text>
+            </View>
+          )}
+
+          {/* Man of the Match */}
+          {matchSummary.momName && (
+            <View style={styles.momCard}>
+              <Text style={styles.momLabel}>Man of the Match</Text>
+              <Text style={styles.momName}>{matchSummary.momName}</Text>
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Scoring Mode - Active scoring interface
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -330,6 +584,205 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: SPACING.xl,
+  },
+  // View Mode Styles
+  matchHeader: {
+    backgroundColor: COLORS.primary,
+    padding: SPACING.lg,
+    alignItems: 'center',
+  },
+  matchTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
+  },
+  statusBadge: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 20,
+  },
+  statusText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  summaryCard: {
+    backgroundColor: '#FFF',
+    margin: SPACING.md,
+    padding: SPACING.lg,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  summaryText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  tossText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  teamScoreCard: {
+    backgroundColor: '#FFF',
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    padding: SPACING.lg,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  teamHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  teamName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  teamScore: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  runRateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  runRateText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  requiredRrText: {
+    fontSize: 14,
+    color: COLORS.live,
+    fontWeight: 'bold',
+  },
+  targetCard: {
+    backgroundColor: '#FFF3CD',
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  targetText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#856404',
+  },
+  momCard: {
+    backgroundColor: '#D4EDDA',
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    padding: SPACING.lg,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  momLabel: {
+    fontSize: 14,
+    color: '#155724',
+    marginBottom: SPACING.xs,
+  },
+  momName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#155724',
+  },
+  // Innings Display Styles
+  inningsSection: {
+    backgroundColor: '#FFF',
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  inningsSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#F8F9FA',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    borderRadius: 6,
+    marginBottom: SPACING.xs,
+  },
+  tableHeaderText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    alignItems: 'center',
+  },
+  playerName: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  outDetail: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  tableCell: {
+    fontSize: 14,
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  extrasText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+  },
+  fowContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  fowText: {
+    fontSize: 13,
+    color: COLORS.text,
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: 6,
+    marginRight: SPACING.xs,
+    marginBottom: SPACING.xs,
   },
 });
 

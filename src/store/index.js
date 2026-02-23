@@ -5,6 +5,7 @@ import {
   matchReducer,
   scoringReducer,
   uiReducer,
+  userReducer,
 } from './slices';
 
 export const store = configureStore({
@@ -14,6 +15,7 @@ export const store = configureStore({
     match: matchReducer,
     scoring: scoringReducer,
     ui: uiReducer,
+    user: userReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

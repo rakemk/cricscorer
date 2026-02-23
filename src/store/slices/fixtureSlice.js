@@ -1,15 +1,33 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fixtureService } from '../../services';
+import { fixtureService, tournamentService } from '../../services';
 
 // Async thunks
 export const fetchTournaments = createAsyncThunk(
   'fixture/fetchTournaments',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fixtureService.getTournamentList();
+      console.log('🔍 DEBUG - Fetching tournaments');
+      
+      const response = await tournamentService.getTournaments();
       return response;
     } catch (error) {
+      console.error('❌ Tournament fetch error:', error);
       return rejectWithValue(error.message || 'Failed to fetch tournaments');
+    }
+  }
+);
+
+export const fetchLiveTournaments = createAsyncThunk(
+  'fixture/fetchLiveTournaments',
+  async (_, { rejectWithValue }) => {
+    try {
+      console.log('🔍 DEBUG - Fetching live tournaments');
+      
+      const response = await tournamentService.getLiveTournaments();
+      return response;
+    } catch (error) {
+      console.error('❌ Live tournament fetch error:', error);
+      return rejectWithValue(error.message || 'Failed to fetch live tournaments');
     }
   }
 );
@@ -94,6 +112,19 @@ const fixtureSlice = createSlice({
         state.fixtures = action.payload.fixtures || [];
       })
       .addCase(fetchFixtures.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Fetch Live Tournaments
+      .addCase(fetchLiveTournaments.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchLiveTournaments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.tournaments = action.payload || [];
+      })
+      .addCase(fetchLiveTournaments.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

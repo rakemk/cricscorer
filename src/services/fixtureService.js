@@ -45,12 +45,36 @@ export const fixtureService = {
       
       return tournaments;
     } catch (error) {
+      console.warn('❌ Tournament fetch error:', error);
+      
       // Try to return cached data on error
       const cached = await AsyncStorage.getItem(STORAGE_KEYS.TOURNAMENTS);
       if (cached) {
-        console.warn('Using cached tournaments due to error:', error.message);
+        console.warn('✅ Using cached tournaments');
         return JSON.parse(cached);
       }
+      
+      // If tournament endpoint doesn't exist (404), return a default tournament
+      // This allows the app to work with live matches without requiring tournaments
+      if (error.status === 404) {
+        console.warn('⚠️ Tournament endpoint not found, using default tournament');
+        const defaultTournament = [{
+          id: 'default',
+          name: 'Live Matches',
+          description: 'All live cricket matches',
+          status: 'ACTIVE',
+          createdAt: new Date().toISOString(),
+        }];
+        
+        // Cache the default tournament
+        await AsyncStorage.setItem(
+          STORAGE_KEYS.TOURNAMENTS,
+          JSON.stringify(defaultTournament)
+        );
+        
+        return defaultTournament;
+      }
+      
       throw error;
     }
   },
@@ -81,6 +105,13 @@ export const fixtureService = {
    */
   async getFixtureList(tournamentId, forceRefresh = false) {
     try {
+      // If using default tournament (no real tournament endpoint), return empty fixtures
+      // Live matches will be displayed instead
+      if (tournamentId === 'default') {
+        console.log('ℹ️ Using default tournament, skipping fixture fetch');
+        return [];
+      }
+      
       const cacheKey = STORAGE_KEYS.FIXTURES + tournamentId;
       
       // Try cache first unless forced
@@ -121,6 +152,9 @@ export const fixtureService = {
    */
   async refreshFixturesBackground(tournamentId) {
     try {
+      // Skip if using default tournament
+      if (tournamentId === 'default') return;
+      
       const response = await apiService.get(
         ENDPOINTS.TOURNAMENT.FIXTURE_LIST(tournamentId)
       );

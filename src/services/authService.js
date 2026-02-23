@@ -4,53 +4,147 @@ import { sessionStorage } from '../utils/storage';
 
 /**
  * Authentication Service
- * Handles login, logout, and token management
- * Replaces loginCtrl.js authentication logic
+ * Handles all authentication operations
+ * Integrated with procric-user-service API
  */
 
 export const authService = {
   /**
-   * Login with email/phone and password
-   * Matches cric-scorer-ui login implementation
-   * @param {string} username - Email or phone number
-   * @param {string} password - User password
-   * @returns {Promise<Object>} - User data and tokens
+   * Verify if identity (phone/email) exists
+   * @param {string} identity - Phone number or email
+   * @returns {Promise<Object>} - {validIdentity: boolean, uuid: string}
    */
-  async login(username, password) {
+  async verifyIdentity(identity) {
+    try {
+      const response = await apiService.post(ENDPOINTS.AUTH.VERIFY_IDENTITY(identity));
+      return response.data; // {validIdentity, uuid}
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Register new user
+   * @param {Object} userData - User registration data
+   * @returns {Promise<Object>} - Registered user data
+   */
+  async register(userData) {
+    try {
+      const response = await apiService.post(ENDPOINTS.AUTH.REGISTER, userData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Set passcode after OTP verification
+   * @param {string} identity - Phone/email
+   * @param {string} otp - OTP code
+   * @param {Object} userData - User data with password
+   * @returns {Promise<boolean>}
+   */
+  async setPasscode(identity, otp, userData) {
+    try {
+      const response = await apiService.post(
+        ENDPOINTS.AUTH.SET_PASSCODE(identity, otp),
+        userData
+      );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Login with UUID and password
+   * @param {string} uuid - User UUID (from identity verification)
+   * @param {string} password - User password
+   * @returns {Promise<Object>} - User data and token
+   */
+  async login(uuid, password) {
     try {
       const response = await apiService.post(ENDPOINTS.AUTH.LOGIN, {
-        username,
+        uuid,
         password,
       });
 
-      // API returns structure: { data: { token: {...}, user: {...} } }
-      // Similar to cric-scorer-ui: response.data.data
-      const sessionData = response.data || response;
+      // API returns: { timeStamp, status, data: { tokenType, token, user } }
+      const result = response.data || response;
       
-      // Extract token information
-      // In cric-scorer-ui format: sessionData.token = { token_type, access_token, refresh_token }
-      if (sessionData.token) {
+      if (result.token && result.tokenType) {
+        // Store token
         await sessionStorage.setTokens(
-          sessionData.token.access_token,
-          sessionData.token.refresh_token,
-          sessionData.token.token_type || 'Bearer'
+          result.token,
+          null, // No refresh token in this response
+          result.tokenType
         );
+        
+        // Store complete session data
+        await sessionStorage.setSessionData(result);
       }
-      // Fallback for direct token format
-      else if (sessionData.access_token) {
-        await sessionStorage.setTokens(
-          sessionData.access_token,
-          sessionData.refresh_token,
-          sessionData.token_type || 'Bearer'
-        );
-      }
-      
-      // Store complete session data (similar to Storage.setLocal("session", apiResponse.data))
-      await sessionStorage.setSessionData(sessionData);
 
-      return sessionData;
+      return result;
     } catch (error) {
-      // Pass through the detailed error message from api.js
+      throw error;
+    }
+  },
+
+  /**
+   * Request OTP for login
+   * @param {string} uuid - User UUID
+   * @returns {Promise<Object>} - User data
+   */
+  async requestLoginOTP(uuid) {
+    try {
+      const response = await apiService.post(ENDPOINTS.AUTH.LOGIN_OTP(uuid));
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Verify login OTP
+   * @param {string} uuid - User UUID
+   * @param {string} otp - OTP code
+   * @returns {Promise<Object>} - User data and token
+   */
+  async verifyLoginOTP(uuid, otp) {
+    try {
+      const response = await apiService.post(
+        ENDPOINTS.AUTH.VERIFY_LOGIN_OTP(uuid, otp)
+      );
+
+      const result = response.data || response;
+      
+      if (result.token && result.tokenType) {
+        await sessionStorage.setTokens(
+          result.token,
+          null,
+          result.tokenType
+        );
+        await sessionStorage.setSessionData(result);
+      }
+
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Generate forgot password OTP
+   * @param {string} identity - Phone/email
+   * @returns {Promise<boolean>}
+   */
+  async forgotPassword(identity) {
+    try {
+      const response = await apiService.post(
+        ENDPOINTS.AUTH.FORGOT_PASSWORD(identity)
+      );
+      return response.data;
+    } catch (error) {
       throw error;
     }
   },
