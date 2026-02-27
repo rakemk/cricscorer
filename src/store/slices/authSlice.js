@@ -37,9 +37,15 @@ export const checkAuthStatus = createAsyncThunk(
       const isAuthenticated = await authService.isAuthenticated();
       if (isAuthenticated) {
         const tokens = await sessionStorage.getTokens();
-        return { isAuthenticated: true, tokens };
+        const sessionData = await sessionStorage.getSessionData();
+        return {
+          isAuthenticated: true,
+          tokens,
+          session: sessionData || null,
+          user: sessionData?.user || null,
+        };
       }
-      return { isAuthenticated: false, tokens: null };
+      return { isAuthenticated: false, tokens: null, session: null, user: null };
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -108,6 +114,8 @@ const authSlice = createSlice({
         state.isCheckingAuth = false;
         state.isAuthenticated = action.payload.isAuthenticated;
         state.tokens = action.payload.tokens;
+        state.session = action.payload.session || null;
+        state.user = action.payload.user || null;
       })
       .addCase(checkAuthStatus.rejected, (state) => {
         state.isCheckingAuth = false;

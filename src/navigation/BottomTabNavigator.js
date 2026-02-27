@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSelector } from 'react-redux';
 import { COLORS } from '../constants';
 
 // Import Screens
@@ -12,18 +13,10 @@ import TeamSelectionScreen from '../screens/TeamSelectionScreen';
 import TossScreen from '../screens/TossScreen';
 import ScoreboardScreen from '../screens/ScoreboardScreen';
 import TournamentScreen from '../screens/TournamentScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-
-// Placeholder screen for Profile
-const ProfileScreen = () => (
-  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
-    <Ionicons name="person-circle" size={64} color={COLORS.textSecondary} />
-    <Text style={{ marginTop: 16, fontSize: 18, color: COLORS.text, fontWeight: '600' }}>Profile</Text>
-    <Text style={{ marginTop: 8, fontSize: 14, color: COLORS.textSecondary }}>Coming Soon</Text>
-  </View>
-);
 
 // Home Stack Navigator (contains Fixtures and related screens)
 const HomeStack = () => (
@@ -91,6 +84,9 @@ const MatchStack = () => (
 
 // Bottom Tab Navigator
 const BottomTabNavigator = () => {
+  const { user } = useSelector((state) => state.auth);
+  const userName = user?.name || user?.firstName || 'Profile';
+
   return (
     <Tab.Navigator
       initialRouteName="Match"
@@ -159,11 +155,12 @@ const BottomTabNavigator = () => {
         name="Login"
         component={ProfileScreen}
         options={{
-          tabBarLabel: 'Login',
+          tabBarLabel: userName,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
           headerShown: true,
+          headerTitle: userName,
           headerStyle: {
             backgroundColor: COLORS.primary,
           },
