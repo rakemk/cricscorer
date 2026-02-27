@@ -33,11 +33,24 @@ const FixturesScreen = ({ navigation }) => {
     filterStatus,
   } = useSelector((state) => state.fixture);
   const filteredFixtures = useSelector(selectFilteredFixtures);
+  const { user } = useSelector((state) => state.auth);
 
   const [refreshing, setRefreshing] = useState(false);
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [liveMatches, setLiveMatches] = useState([]);
   const [loadingLive, setLoadingLive] = useState(false);
+
+  // Debug: Track state changes
+  useEffect(() => {
+    console.log('📊 State Update:');
+    console.log('   Tournaments:', tournaments.length);
+    console.log('   Selected Tournament:', selectedTournament?.name || selectedTournament?.tourName || 'None');
+    console.log('   Fixtures:', filteredFixtures.length);
+    console.log('   Live Matches:', liveMatches.length);
+    console.log('   Filter Status:', filterStatus);
+    console.log('   Loading:', loading);
+    console.log('   Error:', error || 'None');
+  }, [tournaments, selectedTournament, filteredFixtures, liveMatches, filterStatus, loading, error]);
 
   // Merge live matches with fixtures based on current filter
   const getMergedFixtures = () => {
@@ -120,6 +133,13 @@ const FixturesScreen = ({ navigation }) => {
   };
 
   const displayFixtures = getMergedFixtures();
+  
+  // Log final display count
+  console.log('🎬 RENDERING FixturesScreen:');
+  console.log('   Display Fixtures Count:', displayFixtures.length);
+  console.log('   Filter Status:', filterStatus);
+  console.log('   Loading:', loading);
+  console.log('   Loading Live:', loadingLive);
 
   // Set up header with logout button
   useEffect(() => {
@@ -138,48 +158,71 @@ const FixturesScreen = ({ navigation }) => {
   }, [navigation]);
 
   useEffect(() => {
+    console.log('🚀 FixturesScreen mounted - initializing data');
+    console.log('   User:', user?.username || 'Not logged in');
+    
+    // Load all tournaments
+    console.log('📋 Dispatching fetchTournaments...');
     dispatch(fetchTournaments());
-    loadLiveMatches(); // Fetch live matches on mount
+    
+    // Fetch live matches on mount
+    console.log('🏏 Loading live matches...');
+    loadLiveMatches();
   }, [dispatch]);
 
   // Auto-select first tournament if none selected
   useEffect(() => {
+    console.log('🔄 Tournaments changed:', tournaments.length, 'tournaments');
     if (!selectedTournament && tournaments.length > 0) {
-      console.log('🎯 Auto-selecting first tournament:', tournaments[0].name);
+      console.log('🎯 Auto-selecting first tournament:', tournaments[0].name || tournaments[0].tourName);
       dispatch(setSelectedTournament(tournaments[0]));
+    } else if (!selectedTournament && tournaments.length === 0) {
+      console.warn('⚠️ No tournaments available to select');
     }
   }, [tournaments, selectedTournament, dispatch]);
 
   useEffect(() => {
     if (selectedTournament) {
+      console.log('🎪 Selected tournament changed:', selectedTournament.name || selectedTournament.tourName);
+      console.log('   Fetching fixtures for tournament ID:', selectedTournament.id);
       dispatch(fetchFixtures(selectedTournament.id));
+    } else {
+      console.log('⚠️ No tournament selected yet');
     }
   }, [selectedTournament, dispatch]);
 
   // Load live matches
   const loadLiveMatches = async () => {
     try {
+      console.log('🏏 loadLiveMatches: Starting...');
       setLoadingLive(true);
       const matches = await liveMatchService.getLiveMatches();
-      console.log('📊 Live matches received:', matches.length);
+      console.log('✅ Live matches received:', matches.length);
       if (matches.length > 0) {
-        console.log('🔍 First match data:', JSON.stringify(matches[0], null, 2));
+        console.log('📄 First match sample:', JSON.stringify(matches[0], null, 2));
+      } else {
+        console.warn('⚠️ No live matches returned from API');
       }
       setLiveMatches(matches);
     } catch (err) {
-      console.error('Failed to load live matches:', err.message);
+      console.error('❌ Failed to load live matches:', err.message);
+      console.error('   Error details:', err);
     } finally {
       setLoadingLive(false);
+      console.log('🏏 loadLiveMatches: Complete');
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Refresh both fixtures and live matches
+    
+    // Refresh tournaments and matches
     await Promise.all([
+      dispatch(fetchTournaments()),
       selectedTournament ? dispatch(fetchFixtures(selectedTournament.id)) : Promise.resolve(),
       loadLiveMatches(),
     ]);
+    
     setRefreshing(false);
   };
 
@@ -600,6 +643,119 @@ const styles = StyleSheet.create({
   },
   filterTabTextActive: {
     color: COLORS.white,
+  },
+  tournamentFilterButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  tournamentFilterLabel: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  tournamentFilterValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  tournamentFilterValue: {
+    fontSize: FONTS.sizes.md,
+    color: COLORS.text,
+    fontWeight: '600',
+    marginRight: SPACING.xs,
+    maxWidth: '80%',
+  },
+  tournamentFilterPicker: {
+    backgroundColor: COLORS.card,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.xs,
+    borderRadius: BORDER_RADIUS.md,
+    ...SHADOWS.md,
+    maxHeight: 300,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  tournamentFilterOption: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tournamentFilterOptionSelected: {
+    backgroundColor: COLORS.primary + '15',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  tournamentFilterOptionText: {
+    fontSize: FONTS.sizes.md,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  tournamentFilterOptionTextSelected: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  tournamentFilterOptionSubText: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  tournamentFilterOptionStatus: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.textLight,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  selectedTournamentBadge: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '15',
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  selectedTournamentText: {
+    flex: 1,
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  clearFilterButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  clearFilterText: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  orgFilterBadge: {
+    backgroundColor: COLORS.primary + '15',
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  orgFilterText: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
   listContent: {
     padding: SPACING.md,

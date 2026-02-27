@@ -17,6 +17,25 @@ export const fetchTournaments = createAsyncThunk(
   }
 );
 
+export const fetchTournamentsByOrg = createAsyncThunk(
+  'fixture/fetchTournamentsByOrg',
+  async (orgId, { rejectWithValue }) => {
+    try {
+      console.log('🔍 DEBUG - Fetching tournaments for orgId:', orgId);
+      
+      if (!orgId) {
+        throw new Error('Organization ID is required');
+      }
+      
+      const response = await tournamentService.getTournamentsByOrg(orgId);
+      return response;
+    } catch (error) {
+      console.error('❌ Tournament fetch error for org:', error);
+      return rejectWithValue(error.message || 'Failed to fetch tournaments by organization');
+    }
+  }
+);
+
 export const fetchLiveTournaments = createAsyncThunk(
   'fixture/fetchLiveTournaments',
   async (_, { rejectWithValue }) => {
@@ -99,6 +118,19 @@ const fixtureSlice = createSlice({
         state.tournaments = action.payload || [];
       })
       .addCase(fetchTournaments.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Fetch Tournaments By Organization
+      .addCase(fetchTournamentsByOrg.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchTournamentsByOrg.fulfilled, (state, action) => {
+        state.loading = false;
+        state.tournaments = action.payload || [];
+      })
+      .addCase(fetchTournamentsByOrg.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

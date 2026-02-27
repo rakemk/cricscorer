@@ -15,6 +15,71 @@ const STORAGE_KEYS = {
 
 export const tournamentService = {
   /**
+   * Get tournaments by organization ID
+   * @param {number|string} orgId - Organization ID
+   * @param {boolean} forceRefresh - Force API call, skip cache
+   * @returns {Promise<Array>} - List of tournaments
+   */
+  async getTournamentsByOrg(orgId, forceRefresh = false) {
+    try {
+      console.log('📋 Fetching tournaments for orgId:', orgId);
+      
+      if (!orgId) {
+        throw new Error('Organization ID is required');
+      }
+      
+      const cacheKey = `${STORAGE_KEYS.TOURNAMENTS}_org_${orgId}`;
+      
+      // Try cache first unless forced
+      if (!forceRefresh) {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          const tournaments = JSON.parse(cached);
+          console.log('✅ Returning cached org tournaments:', tournaments.length);
+          return tournaments;
+        }
+      }
+
+      const endpoint = ENDPOINTS.TOURNAMENT.BY_ORG(orgId);
+      console.log('🌐 API Request:', endpoint);
+      
+      const response = await apiService.get(endpoint);
+      
+      console.log('📦 API Response:', {
+        hasData: !!response.data,
+        dataType: typeof response.data,
+        isArray: Array.isArray(response.data),
+        count: Array.isArray(response.data) ? response.data.length : 0,
+      });
+      
+      // API returns: { timeStamp, status, data: [...tournaments], detailMessages }
+      const tournaments = response.data || [];
+      
+      // Cache results
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(tournaments));
+      
+      console.log('✅ Tournaments fetched for org:', tournaments.length);
+      return tournaments;
+    } catch (error) {
+      console.error('❌ Tournament fetch error for org:', {
+        orgId,
+        message: error.message,
+        status: error.status,
+      });
+      
+      // Try to return cached data on error
+      const cacheKey = `${STORAGE_KEYS.TOURNAMENTS}_org_${orgId}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        console.warn('⚠️ Using cached tournaments due to error');
+        return JSON.parse(cached);
+      }
+      
+      throw error;
+    }
+  },
+
+  /**
    * Get all tournaments
    * @param {boolean} forceRefresh - Force API call, skip cache
    * @returns {Promise<Array>} - List of tournaments

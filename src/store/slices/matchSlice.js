@@ -185,9 +185,17 @@ const matchSlice = createSlice({
       .addCase(fetchMatchScore.fulfilled, (state, action) => {
         state.loading = false;
         state.match = action.payload;
+        console.log('✅ fetchMatchScore fulfilled - storing in Redux:', {
+          hasPayload: !!action.payload,
+          payloadKeys: action.payload ? Object.keys(action.payload) : [],
+          hasSummary: !!action.payload?.summary,
+          hasInning1: !!action.payload?.inning1,
+          hasInning2: !!action.payload?.inning2,
+        });
         // Store summary data separately if needed
         if (action.payload.summary) {
           state.matchSummary = action.payload.summary;
+          console.log('✅ matchSummary set:', action.payload.summary.teamName1, 'vs', action.payload.summary.teamName2);
         }
       })
       .addCase(fetchMatchScore.rejected, (state, action) => {

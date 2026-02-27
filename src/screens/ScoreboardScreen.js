@@ -262,16 +262,34 @@ const ScoreboardScreen = ({ navigation, route }) => {
 
   // View Mode - Display match score data from API
   if (matchSummary) {
-    const innings1 = match?.inning1;
-    const innings2 = match?.inning2;
+    // Try different possible field names that the API might use
+    let innings1 = match?.inning1 || match?.innings1 || match?.teamInning1 || match?.firstInning;
+    let innings2 = match?.inning2 || match?.innings2 || match?.teamInning2 || match?.secondInning;
     
+    console.log('📊 Full match object:', JSON.stringify(match, null, 2));
     console.log('📊 Match data structure:', {
       hasMatch: !!match,
+      matchKeys: match ? Object.keys(match) : [],
       hasInning1: !!innings1,
       hasInning2: !!innings2,
       inning1Keys: innings1 ? Object.keys(innings1) : [],
       inning2Keys: innings2 ? Object.keys(innings2) : [],
+      inning1BatsmanCount: innings1?.batsman?.length || 0,
+      inning1BowlerCount: innings1?.bowler?.length || 0,
+      inning2BatsmanCount: innings2?.batsman?.length || 0,
+      inning2BowlerCount: innings2?.bowler?.length || 0,
     });
+    console.log('📊 matchSummary:', matchSummary);
+    
+    // If no innings data found, check if match has data property with innings
+    if (!innings1 && match?.data) {
+      innings1 = match.data.inning1 || match.data.innings1;
+      innings2 = match.data.inning2 || match.data.innings2;
+      console.log('📊 Checking match.data for innings:', {
+        hasDataInning1: !!innings1,
+        hasDataInning2: !!innings2,
+      });
+    }
     
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -303,6 +321,56 @@ const ScoreboardScreen = ({ navigation, route }) => {
             )}
           </View>
 
+          {/* Debug Info - Remove after testing */}
+          <View style={[styles.summaryCard, { backgroundColor: '#FFF3CD', padding: 12 }]}>
+            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#856404', marginBottom: 10 }}>
+              🔍 DEBUG INFO
+            </Text>
+            <Text style={{ fontSize: 11, color: '#856404', marginBottom: 4 }}>
+              Match exists: {match ? '✅ Yes' : '❌ No'}
+            </Text>
+            {match && (
+              <>
+                <Text style={{ fontSize: 11, color: '#856404', marginBottom: 4 }}>
+                  Match keys: [{Object.keys(match).join(', ')}]
+                </Text>
+                <Text style={{ fontSize: 11, color: '#856404', marginBottom: 8 }}>
+                  Total keys: {Object.keys(match).length}
+                </Text>
+              </>
+            )}
+            <Text style={{ fontSize: 11, color: '#856404', marginBottom: 4 }}>
+              Has inning1: {innings1 ? '✅ Yes' : '❌ No'}
+            </Text>
+            <Text style={{ fontSize: 11, color: '#856404', marginBottom: 4 }}>
+              Has inning2: {innings2 ? '✅ Yes' : '❌ No'}
+            </Text>
+            {innings1 ? (
+              <>
+                <Text style={{ fontSize: 11, color: '#856404', marginBottom: 4 }}>
+                  Inning1 keys: [{Object.keys(innings1).join(', ')}]
+                </Text>
+                <Text style={{ fontSize: 11, color: '#856404', marginBottom: 4 }}>
+                  Batsmen: {innings1.batsman?.length || 0} | Bowlers: {innings1.bowler?.length || 0}
+                </Text>
+              </>
+            ) : (
+              <Text style={{ fontSize: 11, color: '#D8000C', marginBottom: 4 }}>
+                ⚠️ Inning1 data is missing or empty
+              </Text>
+            )}
+            {innings2 && (
+              <>
+                <Text style={{ fontSize: 11, color: '#856404', marginBottom: 4 }}>
+                  Inning2 keys: [{Object.keys(innings2).join(', ')}]
+                </Text>
+                <Text style={{ fontSize: 11, color: '#856404', marginBottom: 4 }}>
+                  Batsmen: {innings2.batsman?.length || 0} | Bowlers: {innings2.bowler?.length || 0}
+                </Text>
+              </>
+            )}
+          </View>
+
           {/* Team 1 Score */}
           <View style={styles.teamScoreCard}>
             <View style={styles.teamHeader}>
@@ -320,7 +388,7 @@ const ScoreboardScreen = ({ navigation, route }) => {
           </View>
 
           {/* Innings 1 - Batsmen */}
-          {innings1?.batsman && innings1.batsman.length > 0 && (
+          {innings1?.batsman && innings1.batsman.length > 0 ? (
             <View style={styles.inningsSection}>
               <Text style={styles.inningsSectionTitle}>
                 {matchSummary.teamName1} - Batting
@@ -349,10 +417,19 @@ const ScoreboardScreen = ({ navigation, route }) => {
                 </View>
               ))}
             </View>
+          ) : (
+            <View style={[styles.summaryCard, { backgroundColor: '#f8d7da', borderColor: '#f5c6cb' }]}>
+              <Text style={{ fontSize: 12, color: '#721c24', textAlign: 'center' }}>
+                ℹ️ No batting details available for {matchSummary.teamName1}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#721c24', textAlign: 'center', marginTop: 4 }}>
+                {!innings1 ? 'Innings data not found in API response' : 'No batsmen recorded yet'}
+              </Text>
+            </View>
           )}
 
           {/* Innings 1 - Bowlers */}
-          {innings1?.bowler && innings1.bowler.length > 0 && (
+          {innings1?.bowler && innings1.bowler.length > 0 ? (
             <View style={styles.inningsSection}>
               <Text style={styles.inningsSectionTitle}>
                 {matchSummary.teamName2} - Bowling
@@ -373,6 +450,15 @@ const ScoreboardScreen = ({ navigation, route }) => {
                   <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.econ?.toFixed(1)}</Text>
                 </View>
               ))}
+            </View>
+          ) : (
+            <View style={[styles.summaryCard, { backgroundColor: '#f8d7da', borderColor: '#f5c6cb' }]}>
+              <Text style={{ fontSize: 12, color: '#721c24', textAlign: 'center' }}>
+                ℹ️ No bowling details available for {matchSummary.teamName2}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#721c24', textAlign: 'center', marginTop: 4 }}>
+                {!innings1 ? 'Innings data not found in API response' : 'No bowlers recorded yet'}
+              </Text>
             </View>
           )}
 
@@ -416,7 +502,7 @@ const ScoreboardScreen = ({ navigation, route }) => {
               </View>
 
               {/* Innings 2 - Batsmen */}
-              {innings2?.batsman && innings2.batsman.length > 0 && (
+              {innings2?.batsman && innings2.batsman.length > 0 ? (
                 <View style={styles.inningsSection}>
                   <Text style={styles.inningsSectionTitle}>
                     {matchSummary.teamName2} - Batting
@@ -445,10 +531,19 @@ const ScoreboardScreen = ({ navigation, route }) => {
                     </View>
                   ))}
                 </View>
+              ) : (
+                <View style={[styles.summaryCard, { backgroundColor: '#f8d7da', borderColor: '#f5c6cb' }]}>
+                  <Text style={{ fontSize: 12, color: '#721c24', textAlign: 'center' }}>
+                    ℹ️ No batting details available for {matchSummary.teamName2}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#721c24', textAlign: 'center', marginTop: 4 }}>
+                    {!innings2 ? 'Innings data not found in API response' : 'No batsmen recorded yet'}
+                  </Text>
+                </View>
               )}
 
               {/* Innings 2 - Bowlers */}
-              {innings2?.bowler && innings2.bowler.length > 0 && (
+              {innings2?.bowler && innings2.bowler.length > 0 ? (
                 <View style={styles.inningsSection}>
                   <Text style={styles.inningsSectionTitle}>
                     {matchSummary.teamName1} - Bowling
@@ -469,6 +564,15 @@ const ScoreboardScreen = ({ navigation, route }) => {
                       <Text style={[styles.tableCell, { flex: 1 }]}>{bowl.econ?.toFixed(1)}</Text>
                     </View>
                   ))}
+                </View>
+              ) : (
+                <View style={[styles.summaryCard, { backgroundColor: '#f8d7da', borderColor: '#f5c6cb' }]}>
+                  <Text style={{ fontSize: 12, color: '#721c24', textAlign: 'center' }}>
+                    ℹ️ No bowling details available for {matchSummary.teamName1}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#721c24', textAlign: 'center', marginTop: 4 }}>
+                    {!innings2 ? 'Innings data not found in API response' : 'No bowlers recorded yet'}
+                  </Text>
                 </View>
               )}
 

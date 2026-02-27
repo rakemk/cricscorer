@@ -191,10 +191,172 @@ The app automatically filters these matches based on the selected tab (All, Live
 
 **Key Field:** `matchStatus` - Determines which tab the match appears in.
 
+---
+
+## Tournament Management
+
+### Get Tournaments by Organization
+
+**Endpoint:** `GET /api/v1/org/{orgId}/tour`
+
+**Description:** Fetches all tournaments belonging to a specific organization. This is useful when you want to show tournaments filtered by the logged-in user's organization.
+
+**Path Parameters:**
+- `orgId` (required): Organization ID (number)
+
+**Example Request:**
+```
+GET /api/v1/org/123/tour
+```
+
+**Example Response:**
+```json
+{
+  "timeStamp": "2026-02-25T06:30:00.810Z",
+  "status": "Success",
+  "data": [
+    {
+      "id": 1,
+      "userId": 45,
+      "organizerName": "Pro Cricket League",
+      "orgId": 123,
+      "tourName": "IPL 2026",
+      "logo": "https://example.com/logo.png",
+      "auctionStartAt": "2026-02-01T00:00:00.000Z",
+      "auctionEndAt": "2026-02-10T00:00:00.000Z",
+      "tourStartAt": "2026-03-01T00:00:00.000Z",
+      "tourEndAt": "2026-05-31T00:00:00.000Z",
+      "registrationStartAt": "2026-01-15T00:00:00.000Z",
+      "registrationEndAt": "2026-01-31T00:00:00.000Z",
+      "playerParticipationType": "OPEN",
+      "invityType": "INVITED",
+      "tourType": "GROUP",
+      "noOfGroup": 4,
+      "noOfTeam": 10,
+      "groundName": "Wankhede Stadium",
+      "location": "Mumbai, India",
+      "tourDescription": "Premier cricket tournament",
+      "publish": "Y",
+      "fixturePublish": "Y",
+      "status": "ACTIVE",
+      "tourImage": "https://example.com/tour-image.png",
+      "tourShortName": "IPL26",
+      "deleted": "N",
+      "sportType": "cricket",
+      "overType": "LIMITED",
+      "bowlType": "TENNIS"
+    }
+  ],
+  "detailMessages": []
+}
+```
+
+**Usage in App:**
+
+1. **In Services** (`tournamentService.js`):
+```javascript
+import { tournamentService } from '../services';
+
+// Fetch tournaments by organization
+const tournaments = await tournamentService.getTournamentsByOrg(orgId);
+```
+
+2. **In Redux** (`fixtureSlice.js`):
+```javascript
+import { fetchTournamentsByOrg } from '../store/slices/fixtureSlice';
+
+// Get orgId from user state
+const { user } = useSelector((state) => state.auth);
+
+// Dispatch action to fetch tournaments
+if (user?.orgId) {
+  dispatch(fetchTournamentsByOrg(user.orgId));
+}
+```
+
+3. **In Components** (FixturesScreen):
+```javascript
+useEffect(() => {
+  // Option 1: Fetch all tournaments
+  dispatch(fetchTournaments());
+  
+  // Option 2: Fetch tournaments by organization ID
+  const { user } = useSelector((state) => state.auth);
+  if (user?.orgId) {
+    dispatch(fetchTournamentsByOrg(user.orgId));
+  }
+}, [dispatch]);
+```
+
+**Key Fields:**
+- `id` - Tournament ID (use this to fetch fixtures)
+- `orgId` - Organization ID
+- `tourName` - Full tournament name
+- `tourShortName` - Short name for display
+- `status` - Tournament status (ACTIVE, COMPLETED, etc.)
+- `tourStartAt` / `tourEndAt` - Tournament date range
+- `noOfTeam` - Number of teams participating
+- `tourType` - GROUP, KNOCKOUT, etc.
+- `sportType` - Sport type (cricket, etc.)
+- `overType` - LIMITED, T20, etc.
+- `bowlType` - TENNIS, LEATHER, etc.
+
+**Caching:**
+The tournament service automatically caches results for each organization. To force refresh:
+```javascript
+await tournamentService.getTournamentsByOrg(orgId, true); // forceRefresh = true
+```
+
+**Automatic Match Filtering:**
+When a user logs in with an `orgId`, the app automatically:
+1. Fetches all tournaments belonging to that organization
+2. Extracts tournament IDs from the response
+3. Filters live matches to show ONLY matches from those tournaments
+4. Displays a badge showing: "🏢 Showing matches from your organization's X tournaments"
+
+**Additional Tournament Filter Dropdown:**
+Below the match status filters (All, Live, Upcoming, Completed), there's a tournament filter dropdown that allows users to:
+1. See all tournaments from the API (either all tournaments or organization-specific)
+2. Select a specific tournament to view only matches from that tournament
+3. View tournament details including:
+   - Tournament name (`tourName`)
+   - Short name (`tourShortName`)
+   - Status (ACTIVE, COMPLETED, etc.)
+4. Clear the filter to show all matches again
+
+**Filter Priority:**
+- If user has orgId → First filter by organization tournaments
+- Then apply tournament filter dropdown selection (if any)
+- Then apply status filter (Live, Completed, Upcoming, All)
+
+This ensures users only see matches relevant to their organization and can further narrow down by specific tournament!
+
+**Match Field Names:**
+The filtering checks for tournament ID in these fields (in order):
+- `tourId`
+- `tournamentId`
+- `tournament_id`
+- `touramentId` (handles typos)
+
+If your API uses a different field name, matches will still be shown with a warning logged to the console.
+
+---
+
 #### 2. Get Match Score Details
-**Endpoint:** `GET /api/v1/scorer/match/{matchId}/score`
+**Endpoint:** `GET /api/v1/scorer/match/{matchId}/score?state={state}`
 
 **Description:** Returns comprehensive match score data including summary, innings details, and full match information. This is used when viewing any match (live, completed, or upcoming).
+
+**Query Parameters:**
+- `state` (required): Controls the level of detail returned
+  - `FULL` - Returns complete match data including innings, batsmen, bowlers, partnerships, commentary (recommended)
+  - `SUMMARY` - Returns only match summary without detailed innings data
+  - Other values may be supported by the backend
+
+**Example Request:**
+```
+GET /api/v1/scorer/match/1032/score?state=FULL
+```
 
 **Usage:** Called when user taps on any match card to view detailed scorecard.
 
@@ -350,11 +512,17 @@ The app reads the `matchStatus` field from the API response. Check your console 
 
 **Common Issues:**
 
-1. **All matches showing in Live tab:**
+1. **Error: "Required request parameter 'state' for method parameter type String is not present"**
+   - This occurs if the `state` query parameter is missing from the score API call
+   - The app now automatically sends `state=FULL` parameter
+   - Valid state values: `FULL` (complete data), `SUMMARY` (summary only)
+   - Example correct URL: `/api/v1/scorer/match/1032/score?state=FULL`
+
+2. **All matches showing in Live tab:**
    - Check if API is returning `matchStatus: "LIVE"` for all matches
    - Verify the backend is updating match status correctly
 
-2. **Completed matches still showing as LIVE:**
+3. **Completed matches still showing as LIVE:**
    - The API must update `matchStatus` to "COMPLETED" or "END_OF_MATCH" when match ends
    - Check backend logic for status updates
 

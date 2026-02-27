@@ -27,16 +27,21 @@ export const matchService = {
    * Get comprehensive match score data (for viewing live/completed matches)
    * Includes summary, innings data, and full match details
    * @param {string|number} matchId - Match ID
+   * @param {string} state - State parameter (default: 'FULL' for complete details)
    * @returns {Promise<Object>} - Match score data with summary and innings
    */
-  async getMatchScore(matchId) {
+  async getMatchScore(matchId, state = 'FULL') {
     try {
-      console.log('🔵 Fetching match score from:', ENDPOINTS.MATCH.SCORE(matchId));
-      const response = await apiService.get(ENDPOINTS.MATCH.SCORE(matchId));
-      console.log('🔵 Match score response:', {
+      console.log('🔵 Fetching match score from:', ENDPOINTS.MATCH.SCORE(matchId), 'with state:', state);
+      const response = await apiService.get(`${ENDPOINTS.MATCH.SCORE(matchId)}?state=${state}`);
+      console.log('🔵 Match score RAW response:', JSON.stringify(response, null, 2));
+      console.log('🔵 Match score response structure:', {
         hasData: !!response.data,
         hasSummary: !!response.data?.summary,
+        hasInning1: !!response.data?.inning1,
+        hasInning2: !!response.data?.inning2,
         matchStatus: response.data?.summary?.matchStatus,
+        dataKeys: response.data ? Object.keys(response.data) : [],
       });
       return response.data || response;
     } catch (error) {

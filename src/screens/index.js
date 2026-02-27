@@ -5,3 +5,4 @@ export { default as MatchSetupScreen } from './MatchSetupScreen';
 export { default as TeamSelectionScreen } from './TeamSelectionScreen';
 export { default as TossScreen } from './TossScreen';
 export { default as ScoreboardScreen } from './ScoreboardScreen';
+export { default as TournamentScreen } from './TournamentScreen';

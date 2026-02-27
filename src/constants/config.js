@@ -66,6 +66,7 @@ export const ENDPOINTS = {
     // Tournament endpoints (based on cric-scorer-ui using /v1 instead of /v2)
     LIST: '/v1/scorer/tournament/list',
     LIVE_TOURNAMENTS: '/v1/scorer/tournaments/live',
+    BY_ORG: (orgId) => `/v1/org/${orgId}/tour`, // Get all tournaments by organization
     CREATE: '/v1/scorer/tournament',
     UPDATE: (tourId) => `/v1/scorer/tournament/${tourId}`,
     DELETE: (tourId) => `/v1/scorer/tournament/${tourId}`,

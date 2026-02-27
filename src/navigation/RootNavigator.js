@@ -4,7 +4,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 import AuthNavigator from './AuthNavigator';
-import MainNavigator from './MainNavigator';
+import BottomTabNavigator from './BottomTabNavigator';
 import { checkAuthStatus } from '../store/slices/authSlice';
 import { COLORS } from '../constants';
 
@@ -27,7 +27,7 @@ const RootNavigator = () => {
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
+      {isAuthenticated ? <BottomTabNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 };
