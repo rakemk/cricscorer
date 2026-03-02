@@ -8,10 +8,16 @@ export const SCREENS = {
   // Auth
   LOGIN: 'Login',
   
-  // Main
-  FIXTURES: 'Fixtures',
+  // Tournament flow
+  TOURNAMENT_LIST: 'TournamentList',
+  FIXTURES_LIST: 'FixturesList',
+  
+  // Match flow
   MATCH_SETUP: 'MatchSetup',
   TEAM_SELECTION: 'TeamSelection',
   TOSS: 'Toss',
   SCOREBOARD: 'Scoreboard',
+  
+  // Legacy
+  FIXTURES: 'Fixtures',
 };

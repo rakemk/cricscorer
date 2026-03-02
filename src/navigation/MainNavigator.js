@@ -1,8 +1,13 @@
 import React from 'react';
+import { TouchableOpacity, Alert } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import { useDispatch } from 'react-redux';
 import { COLORS } from '../constants';
+import { logout } from '../store/slices/authSlice';
 
 // Main Screens
+import TournamentScreen from '../screens/TournamentScreen';
 import FixturesScreen from '../screens/FixturesScreen';
 import MatchSetupScreen from '../screens/MatchSetupScreen';
 import TeamSelectionScreen from '../screens/TeamSelectionScreen';
@@ -12,9 +17,18 @@ import ScoreboardScreen from '../screens/ScoreboardScreen';
 const Stack = createNativeStackNavigator();
 
 const MainNavigator = () => {
+  const dispatch = useDispatch();
+
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: () => dispatch(logout()) },
+    ]);
+  };
+
   return (
     <Stack.Navigator
-      initialRouteName="Fixtures"
+      initialRouteName="TournamentList"
       screenOptions={{
         headerStyle: {
           backgroundColor: COLORS.primary,
@@ -23,12 +37,28 @@ const MainNavigator = () => {
         headerTitleStyle: {
           fontWeight: 'bold',
         },
+        headerTitleAlign: 'center',
       }}
     >
       <Stack.Screen
-        name="Fixtures"
+        name="TournamentList"
+        component={TournamentScreen}
+        options={{
+          title: 'Procri8',
+          headerTitleAlign: 'left',
+          headerRight: () => (
+            <TouchableOpacity onPress={handleLogout} style={{ paddingHorizontal: 8 }}>
+              <Ionicons name="log-out-outline" size={24} color={COLORS.white} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+      <Stack.Screen
+        name="FixturesList"
         component={FixturesScreen}
-        options={{ title: 'Fixtures' }}
+        options={({ route }) => ({
+          title: route.params?.tournamentName || 'Matches',
+        })}
       />
       <Stack.Screen
         name="MatchSetup"
@@ -52,7 +82,7 @@ const MainNavigator = () => {
         component={ScoreboardScreen}
         options={{
           title: 'Scoreboard',
-          headerShown: false, // Full screen scoreboard
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

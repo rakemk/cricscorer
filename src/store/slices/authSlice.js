@@ -7,18 +7,10 @@ export const login = createAsyncThunk(
   'auth/login',
   async ({ username, password }, { rejectWithValue }) => {
     try {
-      // Step 1: Verify identity and get UUID
-      const identityResult = await authService.verifyIdentity(username);
-      
-      if (!identityResult.validIdentity) {
-        return rejectWithValue('Invalid phone number or email');
-      }
-
-      // Step 2: Login with UUID and password
-      const response = await authService.login(identityResult.uuid, password);
-      return response;
+      // Single POST /v2/auth/scorer with { username, password }
+      const result = await authService.login(username, password);
+      return result; // { user, token }
     } catch (error) {
-      // Handle both Error objects and error response objects
       const errorMessage = error.message || error.error || 'Invalid Email or Password';
       return rejectWithValue(errorMessage);
     }
@@ -83,15 +75,15 @@ const authSlice = createSlice({
       .addCase(login.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
-        state.session = action.payload; // Store complete session data
         state.user = action.payload.user || null;
+        state.session = action.payload;
         
-        // Handle new API token structure
-        // Response format: { tokenType, token, user }
+        // ProCric8 token structure: { token_type, access_token, refresh_token }
+        const tokenInfo = action.payload.token || {};
         state.tokens = {
-          accessToken: action.payload.token,
-          refreshToken: null,
-          tokenType: action.payload.tokenType || 'Bearer',
+          accessToken: tokenInfo.access_token,
+          refreshToken: tokenInfo.refresh_token || null,
+          tokenType: tokenInfo.token_type || 'Bearer',
         };
       })
       .addCase(login.rejected, (state, action) => {

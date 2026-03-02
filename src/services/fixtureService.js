@@ -1,5 +1,5 @@
 import { apiService } from './api';
-import { ENDPOINTS } from '../constants';
+import { ENDPOINTS, API_CONFIG } from '../constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
@@ -232,6 +232,85 @@ export const fixtureService = {
       }
     } catch (error) {
       console.error('Error clearing fixture storage:', error);
+    }
+  },
+
+  /**
+   * Get fixtures for a tournament using ProCric8 V2 API
+   * API: http://api.procric8.com/public/index.php/api/v2/scorer/tournament/{id}/fixture/list
+   * @param {string|number} tournamentId - Tournament ID
+   * @param {boolean} forceRefresh - Force API call, skip cache
+   * @returns {Promise<Array>} - List of fixtures
+   */
+  async getFixtureListV2(tournamentId, forceRefresh = false) {
+    try {
+      const cacheKey = `${STORAGE_KEYS.FIXTURES}v2_${tournamentId}`;
+      
+      // Try cache first unless forced
+      if (!forceRefresh) {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          const fixtures = JSON.parse(cached);
+          console.log('✅ Returning cached fixtures:', fixtures.length);
+          this.refreshFixturesV2Background(tournamentId);
+          return fixtures;
+        }
+      }
+
+      console.log('🌐 Fixture API Request:', ENDPOINTS.TOURNAMENT.FIXTURE_LIST(tournamentId));
+      
+      const response = await apiService.get(
+        ENDPOINTS.TOURNAMENT.FIXTURE_LIST(tournamentId)
+      );
+      
+      // Extract fixtures from response
+      // API returns: { status: 200, message: "Sucess", data: [...] }
+      let fixtures = [];
+      
+      if (response && response.data) {
+        fixtures = Array.isArray(response.data) ? response.data : [];
+      } else if (Array.isArray(response)) {
+        fixtures = response;
+      }
+      
+      console.log('✅ Fixtures fetched:', fixtures.length);
+      
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(fixtures));
+      
+      return fixtures;
+    } catch (error) {
+      console.error('❌ Fixture fetch error:', error.message);
+      
+      const cacheKey = `${STORAGE_KEYS.FIXTURES}v2_${tournamentId}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        console.warn('⚠️ Using cached fixtures due to error');
+        return JSON.parse(cached);
+      }
+      
+      throw error;
+    }
+  },
+
+  /**
+   * Background refresh for fixtures
+   * @private
+   */
+  async refreshFixturesV2Background(tournamentId) {
+    try {
+      const response = await apiService.get(
+        ENDPOINTS.TOURNAMENT.FIXTURE_LIST(tournamentId)
+      );
+      let fixtures = [];
+      if (response && response.data) {
+        fixtures = Array.isArray(response.data) ? response.data : [];
+      } else if (Array.isArray(response)) {
+        fixtures = response;
+      }
+      const cacheKey = `${STORAGE_KEYS.FIXTURES}v2_${tournamentId}`;
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(fixtures));
+    } catch (error) {
+      console.warn('Background fixture refresh failed:', error.message);
     }
   },
 

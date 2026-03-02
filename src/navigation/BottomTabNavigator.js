@@ -18,8 +18,8 @@ import ProfileScreen from '../screens/ProfileScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// Home Stack Navigator (contains Fixtures and related screens)
-const HomeStack = () => (
+// Tournament Stack: Tournaments → Fixtures → Match flow
+const TournamentStack = () => (
   <Stack.Navigator
     screenOptions={{
       headerStyle: {
@@ -29,33 +29,20 @@ const HomeStack = () => (
       headerTitleStyle: {
         fontWeight: 'bold',
       },
+      headerTitleAlign: 'center',
     }}
   >
     <Stack.Screen
-      name="HomeMain"
-      component={FixturesScreen}
-      options={{ title: 'Home', headerShown: false }}
+      name="TournamentList"
+      component={TournamentScreen}
+      options={{ title: 'Procri8' }}
     />
-  </Stack.Navigator>
-);
-
-// Match Stack Navigator (contains match flow screens)
-const MatchStack = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerStyle: {
-        backgroundColor: COLORS.primary,
-      },
-      headerTintColor: COLORS.white,
-      headerTitleStyle: {
-        fontWeight: 'bold',
-      },
-    }}
-  >
     <Stack.Screen
-      name="MatchList"
+      name="FixturesList"
       component={FixturesScreen}
-      options={{ title: 'Matches' }}
+      options={({ route }) => ({
+        title: route.params?.tournamentName || 'Matches',
+      })}
     />
     <Stack.Screen
       name="MatchSetup"
@@ -89,7 +76,7 @@ const BottomTabNavigator = () => {
 
   return (
     <Tab.Navigator
-      initialRouteName="Match"
+      initialRouteName="Home"
       screenOptions={{
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
@@ -115,40 +102,12 @@ const BottomTabNavigator = () => {
     >
       <Tab.Screen
         name="Home"
-        component={HomeStack}
+        component={TournamentStack}
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
-        }}
-      />
-      <Tab.Screen
-        name="Match"
-        component={MatchStack}
-        options={{
-          tabBarLabel: 'Match',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cricket" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Tournament"
-        component={TournamentScreen}
-        options={{
-          tabBarLabel: 'Tournament',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="trophy" size={size} color={color} />
-          ),
-          headerShown: true,
-          headerStyle: {
-            backgroundColor: COLORS.primary,
-          },
-          headerTintColor: COLORS.white,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
         }}
       />
       <Tab.Screen
@@ -161,6 +120,7 @@ const BottomTabNavigator = () => {
           ),
           headerShown: true,
           headerTitle: userName,
+          headerTitleAlign: 'center',
           headerStyle: {
             backgroundColor: COLORS.primary,
           },

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,974 +7,606 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
-  Alert,
+  Image,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
-  fetchTournaments,
-  fetchFixtures,
-  setSelectedTournament,
+  fetchFixturesV2,
   setSelectedFixture,
-  setFilterStatus,
-  selectFilteredFixtures,
 } from '../store/slices/fixtureSlice';
-import { COLORS, SPACING, FONTS, BORDER_RADIUS, SHADOWS, MATCH_STATUS } from '../constants';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '../constants';
 import { SCREENS } from '../navigation';
-import { logout } from '../store/slices/authSlice';
-import { liveMatchService } from '../services';
 
-const FixturesScreen = ({ navigation }) => {
+// Base URL for team logo images
+const ASSET_BASE = API_CONFIG.ASSET_BASE_URL;
+
+const TABS = {
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  RESULT: 'result',
+};
+
+const FixturesScreen = ({ navigation, route }) => {
   const dispatch = useDispatch();
-  const {
-    tournaments,
-    selectedTournament,
-    loading,
-    error,
-    filterStatus,
-  } = useSelector((state) => state.fixture);
-  const filteredFixtures = useSelector(selectFilteredFixtures);
-  const { user } = useSelector((state) => state.auth);
+  const { fixtures, loading, error } = useSelector((state) => state.fixture);
 
   const [refreshing, setRefreshing] = useState(false);
-  const [showTournamentPicker, setShowTournamentPicker] = useState(false);
-  const [liveMatches, setLiveMatches] = useState([]);
-  const [loadingLive, setLoadingLive] = useState(false);
+  const [activeTab, setActiveTab] = useState(TABS.IN_PROGRESS);
 
-  // Debug: Track state changes
+  // Get tournament data from route params
+  const tournament = route?.params?.tournament;
+  const tournamentId = route?.params?.tournamentId || tournament?.tour_id || tournament?.id;
+  const tournamentName =
+    route?.params?.tournamentName ||
+    tournament?.tour_name ||
+    tournament?.tourName ||
+    tournament?.name ||
+    'Fixtures';
+
+  // Load fixtures when screen mounts or tournament changes
   useEffect(() => {
-    console.log('📊 State Update:');
-    console.log('   Tournaments:', tournaments.length);
-    console.log('   Selected Tournament:', selectedTournament?.name || selectedTournament?.tourName || 'None');
-    console.log('   Fixtures:', filteredFixtures.length);
-    console.log('   Live Matches:', liveMatches.length);
-    console.log('   Filter Status:', filterStatus);
-    console.log('   Loading:', loading);
-    console.log('   Error:', error || 'None');
-  }, [tournaments, selectedTournament, filteredFixtures, liveMatches, filterStatus, loading, error]);
-
-  // Merge live matches with fixtures based on current filter
-  const getMergedFixtures = () => {
-    // Log all live matches for debugging
-    if (liveMatches.length > 0) {
-      console.log('🟢 Total live matches to transform:', liveMatches.length);
+    if (tournamentId) {
+      console.log('🏏 Loading fixtures for tournament:', tournamentId);
+      dispatch(fetchFixturesV2(tournamentId));
     }
-    
-    // Transform live matches to fixture format
-    const transformedLiveMatches = liveMatches.map(match => {
-      // Log raw match data
-      console.log('🟡 Raw match object:', {
-        matchId: match.matchId,
-        matchStatus: match.matchStatus,
-        status: match.status,
-        match_status: match.match_status,
-        allKeys: Object.keys(match),
-        fullMatch: JSON.stringify(match),
-      });
-      
-      // Extract status from various possible field names
-      const status = match.matchStatus || match.status || match.match_status || 'COMPLETED';
-      
-      console.log('🎯 Match status mapping:', {
-        matchId: match.matchId,
-        originalStatus: match.matchStatus,
-        mappedStatus: status,
-        teamName1: match.teamName1,
-        teamName2: match.teamName2,
-      });
-      
-      return {
-        id: match.matchId,
-        matchId: match.matchId,
-        team1_name: match.teamName1,
-        team2_name: match.teamName2,
-        team1_score: match.teamScore1,
-        team2_score: match.teamScore2,
-        team1_over: match.teamOver1,
-        team2_over: match.teamOver2,
-        match_status: status,
-        match_summary: match.matchSummary,
-        toss_details: match.tossDetails,
-        isLiveMatch: true, // Flag to identify live matches
-      };
-    });
+  }, [tournamentId, dispatch]);
 
-    // Merge based on filter
-    if (filterStatus === 'all') {
-      // Show all matches (from API + fixtures) regardless of status
-      return [...transformedLiveMatches, ...filteredFixtures];
-    } else if (filterStatus === 'live') {
-      // Only show matches with LIVE or INNINGS_BREAK status
-      const liveOnly = transformedLiveMatches.filter(m => {
-        const statusUpper = (m.match_status || '').toString().toUpperCase();
-        return statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
-      });
-      console.log('🔴 Live filter applied. Total:', transformedLiveMatches.length, '→ Live only:', liveOnly.length);
-      return liveOnly;
-    } else if (filterStatus === 'completed') {
-      // Show completed matches from API + completed fixtures
-      const completedLive = transformedLiveMatches.filter(m => {
-        const statusUpper = (m.match_status || '').toString().toUpperCase();
-        return statusUpper === 'COMPLETED' || statusUpper === 'END_OF_MATCH';
-      });
-      console.log('🟢 Completed filter applied. Total:', transformedLiveMatches.length, '→ Completed:', completedLive.length);
-      return [...completedLive, ...filteredFixtures];
-    } else if (filterStatus === 'upcoming') {
-      // Show upcoming matches from API + upcoming fixtures
-      const upcomingLive = transformedLiveMatches.filter(m => {
-        const statusUpper = (m.match_status || '').toString().toUpperCase();
-        return statusUpper === 'UPCOMING' || statusUpper === 'YET_TO_START' || statusUpper === 'FIXTURE';
-      });
-      console.log('🟡 Upcoming filter applied. Total:', transformedLiveMatches.length, '→ Upcoming:', upcomingLive.length);
-      return [...upcomingLive, ...filteredFixtures];
-    } else {
-      // Default: show only fixtures
-      return filteredFixtures;
-    }
-  };
+  // Filter fixtures based on active tab
+  const getFilteredFixtures = useCallback(() => {
+    if (!fixtures || !Array.isArray(fixtures)) return [];
 
-  const displayFixtures = getMergedFixtures();
-  
-  // Log final display count
-  console.log('🎬 RENDERING FixturesScreen:');
-  console.log('   Display Fixtures Count:', displayFixtures.length);
-  console.log('   Filter Status:', filterStatus);
-  console.log('   Loading:', loading);
-  console.log('   Loading Live:', loadingLive);
+    return fixtures.filter((f) => {
+      const status = (f.match_status || f.status || '')
+        .toString()
+        .toUpperCase();
 
-  // Set up header with logout button
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={{ paddingRight: 15 }}
-        >
-          <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: '600' }}>
-            Logout
-          </Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation]);
-
-  useEffect(() => {
-    console.log('🚀 FixturesScreen mounted - initializing data');
-    console.log('   User:', user?.username || 'Not logged in');
-    
-    // Load all tournaments
-    console.log('📋 Dispatching fetchTournaments...');
-    dispatch(fetchTournaments());
-    
-    // Fetch live matches on mount
-    console.log('🏏 Loading live matches...');
-    loadLiveMatches();
-  }, [dispatch]);
-
-  // Auto-select first tournament if none selected
-  useEffect(() => {
-    console.log('🔄 Tournaments changed:', tournaments.length, 'tournaments');
-    if (!selectedTournament && tournaments.length > 0) {
-      console.log('🎯 Auto-selecting first tournament:', tournaments[0].name || tournaments[0].tourName);
-      dispatch(setSelectedTournament(tournaments[0]));
-    } else if (!selectedTournament && tournaments.length === 0) {
-      console.warn('⚠️ No tournaments available to select');
-    }
-  }, [tournaments, selectedTournament, dispatch]);
-
-  useEffect(() => {
-    if (selectedTournament) {
-      console.log('🎪 Selected tournament changed:', selectedTournament.name || selectedTournament.tourName);
-      console.log('   Fetching fixtures for tournament ID:', selectedTournament.id);
-      dispatch(fetchFixtures(selectedTournament.id));
-    } else {
-      console.log('⚠️ No tournament selected yet');
-    }
-  }, [selectedTournament, dispatch]);
-
-  // Load live matches
-  const loadLiveMatches = async () => {
-    try {
-      console.log('🏏 loadLiveMatches: Starting...');
-      setLoadingLive(true);
-      const matches = await liveMatchService.getLiveMatches();
-      console.log('✅ Live matches received:', matches.length);
-      if (matches.length > 0) {
-        console.log('📄 First match sample:', JSON.stringify(matches[0], null, 2));
-      } else {
-        console.warn('⚠️ No live matches returned from API');
+      if (activeTab === TABS.IN_PROGRESS) {
+        return (
+          status === 'FIXTURE' ||
+          status === 'YET_TO_START' ||
+          status === 'LIVE' ||
+          status === 'INNINGS_BREAK' ||
+          status === 'DRINK_BREAK' ||
+          status === 'TEA_BREAK' ||
+          status === 'LUNCH_BREAK' ||
+          status === 'STOPPED_DUE_TO_RAIN' ||
+          status === 'DELAYED_DUE_TO_BAD_WEATHER'
+        );
       }
-      setLiveMatches(matches);
-    } catch (err) {
-      console.error('❌ Failed to load live matches:', err.message);
-      console.error('   Error details:', err);
-    } finally {
-      setLoadingLive(false);
-      console.log('🏏 loadLiveMatches: Complete');
-    }
-  };
+
+      if (activeTab === TABS.COMPLETED) {
+        return status === 'COMPLETED' || status === 'END_OF_MATCH';
+      }
+
+      if (activeTab === TABS.RESULT) {
+        return (
+          status === 'COMPLETED' ||
+          status === 'END_OF_MATCH' ||
+          status === 'ABANDONED'
+        );
+      }
+
+      return false;
+    });
+  }, [fixtures, activeTab]);
+
+  const displayFixtures = getFilteredFixtures();
 
   const onRefresh = async () => {
     setRefreshing(true);
-    
-    // Refresh tournaments and matches
-    await Promise.all([
-      dispatch(fetchTournaments()),
-      selectedTournament ? dispatch(fetchFixtures(selectedTournament.id)) : Promise.resolve(),
-      loadLiveMatches(),
-    ]);
-    
+    if (tournamentId) {
+      await dispatch(fetchFixturesV2(tournamentId));
+    }
     setRefreshing(false);
-  };
-
-  const handleTournamentSelect = (tournament) => {
-    dispatch(setSelectedTournament(tournament));
-    setShowTournamentPicker(false);
   };
 
   const handleFixturePress = (fixture) => {
     dispatch(setSelectedFixture(fixture));
-    
-    const statusUpper = (fixture.match_status || '').toString().toUpperCase();
-    
-    console.log('🎯 Match tapped:', {
-      matchId: fixture.id || fixture.matchId,
-      status: fixture.match_status,
-      statusUpper,
-      isLiveMatch: fixture.isLiveMatch,
-    });
-    
-    // Navigate based on match status
-    // LIVE or INNINGS_BREAK or COMPLETED → Scoreboard (view live or completed match)
-    // UPCOMING → Match Setup (configure and start the match)
+
+    const statusUpper = (fixture.match_status || fixture.status || '')
+      .toString()
+      .toUpperCase();
+
+    const matchId = fixture.match_id || fixture.id || fixture.matchId;
+
+    console.log('🎯 Match tapped:', { matchId, status: statusUpper });
+
     if (
       statusUpper === 'LIVE' ||
       statusUpper === 'INNINGS_BREAK' ||
       statusUpper === 'COMPLETED' ||
-      statusUpper === 'END_OF_MATCH' ||
-      fixture.match_status === MATCH_STATUS.LIVE ||
-      fixture.match_status === MATCH_STATUS.INNINGS_BREAK ||
-      fixture.match_status === MATCH_STATUS.COMPLETED ||
-      fixture.match_status === MATCH_STATUS.END_OF_MATCH
+      statusUpper === 'END_OF_MATCH'
     ) {
-      console.log('→ Navigating to SCOREBOARD');
-      navigation.navigate(SCREENS.SCOREBOARD, { matchId: fixture.id || fixture.matchId });
+      navigation.navigate(SCREENS.SCOREBOARD, {
+        matchId,
+        fixtureData: {
+          teamName1: fixture.team_name1 || fixture.team1_name,
+          teamName2: fixture.team_name2 || fixture.team2_name,
+          teamScore1: fixture.team1_score,
+          teamScore2: fixture.team2_score,
+          teamOver1: fixture.team1_over,
+          teamOver2: fixture.team2_over,
+          matchStatus: fixture.match_status || fixture.status,
+          matchSummary: fixture.match_summary,
+          matchId,
+        },
+      });
     } else {
-      console.log('→ Navigating to MATCH_SETUP');
-      navigation.navigate(SCREENS.MATCH_SETUP, { matchId: fixture.id || fixture.matchId });
+      navigation.navigate(SCREENS.MATCH_SETUP, { matchId });
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: () => {
-            dispatch(logout());
-          },
-        },
-      ],
-      { cancelable: true }
-    );
-  };
+  // ─── Helpers ───
 
   const getStatusColor = (status) => {
-    if (!status) return COLORS.upcoming;
-    
-    // Handle both MATCH_STATUS constants and API string values
-    const statusUpper = status.toUpperCase ? status.toUpperCase() : String(status).toUpperCase();
-    
-    switch (statusUpper) {
-      case 'LIVE':
-      case 'INNINGS_BREAK':
-      case MATCH_STATUS.LIVE:
-      case MATCH_STATUS.INNINGS_BREAK:
-        return COLORS.live;
-      case 'COMPLETED':
-      case 'END_OF_MATCH':
-      case MATCH_STATUS.COMPLETED:
-      case MATCH_STATUS.END_OF_MATCH:
-        return COLORS.completed;
-      default:
-        return COLORS.upcoming;
-    }
+    if (!status) return COLORS.upcoming || '#17a2b8';
+    const s = status.toString().toUpperCase();
+    if (s === 'LIVE' || s === 'INNINGS_BREAK') return COLORS.live || '#28a745';
+    if (s === 'COMPLETED' || s === 'END_OF_MATCH')
+      return COLORS.completed || '#6c757d';
+    if (s === 'FIXTURE') return '#337ab7';
+    if (s === 'YET_TO_START') return '#5bc0de';
+    return '#17a2b8';
   };
 
   const getStatusText = (status) => {
     if (!status) return 'UPCOMING';
-    
-    // Handle both MATCH_STATUS constants and API string values
-    const statusUpper = status.toUpperCase ? status.toUpperCase() : String(status).toUpperCase();
-    
-    switch (statusUpper) {
-      case 'LIVE':
-      case MATCH_STATUS.LIVE:
-        return 'LIVE';
-      case 'INNINGS_BREAK':
-      case MATCH_STATUS.INNINGS_BREAK:
-        return 'INNINGS BREAK';
-      case 'COMPLETED':
-      case 'END_OF_MATCH':
-      case MATCH_STATUS.COMPLETED:
-      case MATCH_STATUS.END_OF_MATCH:
-        return 'COMPLETED';
-      case 'FIXTURE':
-      case 'YET_TO_START':
-      case 'UPCOMING':
-      case MATCH_STATUS.FIXTURE:
-      case MATCH_STATUS.YET_TO_START:
-        return 'UPCOMING';
-      default:
-        return status.toString().replace(/_/g, ' ');
-    }
+    return status.toString().toUpperCase().replace(/ /g, '_');
+  };
+
+  const getActionButtonText = (status) => {
+    if (!status) return 'START';
+    const s = status.toString().toUpperCase();
+    if (s === 'LIVE' || s === 'INNINGS_BREAK') return 'VIEW LIVE';
+    if (s === 'COMPLETED' || s === 'END_OF_MATCH') return 'VIEW RESULT';
+    return 'START';
+  };
+
+  // ─── Match Card (matching the shared image UI) ───
+
+  // Build full logo URL from relative path
+  const getLogoUrl = (relativePath) => {
+    if (!relativePath) return null;
+    if (relativePath.startsWith('http')) return relativePath;
+    return `${ASSET_BASE}${relativePath}`;
   };
 
   const renderFixtureCard = ({ item }) => {
-    const isLive = item.isLiveMatch || 
-                   item.match_status === 'LIVE' || 
-                   item.match_status === MATCH_STATUS.LIVE;
-    
+    const matchStatus = item.match_status || item.status || '';
+    const statusUpper = matchStatus.toString().toUpperCase();
+    const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
+
+    // Map V2 API fields: match_id, match_name, team_name1, team_name2, team_logo1, team_logo2
+    const matchId = item.match_id || item.id || item.matchId;
+    const matchName = item.match_name || '';
+    const tourName = tournamentName || item.tournament_name || item.tourName || '';
+    const matchDate = item.match_date || item.matchDate || '';
+    const venue = item.ground_name || item.venue || item.groundName || '';
+    const matchType = item.match_type || item.matchType || 'Group';
+    const team1 = item.team_name1 || item.team1_name || item.teamName1 || 'Team 1';
+    const team2 = item.team_name2 || item.team2_name || item.teamName2 || 'Team 2';
+    const logo1 = getLogoUrl(item.team_logo1 || item.team1_logo);
+    const logo2 = getLogoUrl(item.team_logo2 || item.team2_logo);
+
+    // Header line: "4SPL 1 , Match #:686"
+    const headerLine = `${tourName}${matchId ? `, Match #:${matchId}` : ''}`;
+    // Venue line: "2025-12-28 03:00 PM, Pitch 1, Chikuwadi..."
+    const venueLine = [matchDate, venue].filter(Boolean).join(', ');
+
     return (
-      <TouchableOpacity
-        style={[
-          styles.fixtureCard,
-          isLive && styles.fixtureCardLive, // Highlight live matches
-        ]}
-        onPress={() => handleFixturePress(item)}
-      >
-        {/* Status Badge */}
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: getStatusColor(item.match_status) },
-          ]}
-        >
-          <Text style={styles.statusText}>{getStatusText(item.match_status)}</Text>
+      <View style={[styles.matchCard, isLive && styles.matchCardLive]}>
+        {/* Row 1: Tournament + Match # | Status Badge */}
+        <View style={styles.matchCardHeader}>
+          <Text style={styles.matchTournamentText} numberOfLines={1}>
+            {headerLine}
+          </Text>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(matchStatus) },
+            ]}
+          >
+            <Text style={styles.statusBadgeText}>
+              {getStatusText(matchStatus)}
+            </Text>
+          </View>
         </View>
 
-        {/* Match Summary for live matches */}
+        {/* Row 2: Date & Venue (red/orange text) */}
+        {venueLine ? (
+          <Text style={styles.matchVenueText} numberOfLines={2}>
+            {venueLine}
+          </Text>
+        ) : null}
+
+        {/* Row 3: Match Type (centered) */}
+        <Text style={styles.matchTypeText}>{matchType}</Text>
+
+        {/* Row 4: Team logos + Team1 v/s Team2 */}
+        <View style={styles.teamsRow}>
+          {logo1 ? (
+            <Image source={{ uri: logo1 }} style={styles.teamLogo} resizeMode="contain" />
+          ) : null}
+          <Text style={styles.teamNameText} numberOfLines={1}>
+            {team1}
+          </Text>
+          <Text style={styles.vsText}>v/s</Text>
+          <Text style={[styles.teamNameText, { textAlign: 'right' }]} numberOfLines={1}>
+            {team2}
+          </Text>
+          {logo2 ? (
+            <Image source={{ uri: logo2 }} style={styles.teamLogo} resizeMode="contain" />
+          ) : null}
+        </View>
+
+        {/* Scores (visible for live/completed) */}
+        {(item.team1_score || item.team2_score) && (
+          <View style={styles.scoresRow}>
+            <Text style={styles.scoreText}>
+              {item.team1_score || '-'}
+              {item.team1_over ? ` (${item.team1_over})` : ''}
+            </Text>
+            <Text style={styles.scoreSeparator}>-</Text>
+            <Text style={styles.scoreText}>
+              {item.team2_score || '-'}
+              {item.team2_over ? ` (${item.team2_over})` : ''}
+            </Text>
+          </View>
+        )}
+
+        {/* Match Summary (completed) */}
         {item.match_summary && (
-          <Text style={styles.matchSummaryText} numberOfLines={1}>
+          <Text style={styles.matchSummaryText} numberOfLines={2}>
             {item.match_summary}
           </Text>
         )}
 
-        {/* Teams */}
-        <View style={styles.teamsContainer}>
-          <View style={styles.teamRow}>
-            <View style={styles.teamLogo}>
-              <Text style={styles.teamInitial}>
-                {item.team1_short_name?.[0] || item.team1_name?.[0] || 'T1'}
-              </Text>
-            </View>
-            <Text style={styles.teamName} numberOfLines={1}>
-              {item.team1_name || 'Team 1'}
-            </Text>
-            {item.team1_score && (
-              <View style={styles.scoreWithOvers}>
-                <Text style={styles.teamScore}>{item.team1_score}</Text>
-                {item.team1_over && (
-                  <Text style={styles.teamOvers}> {item.team1_over}</Text>
-                )}
-              </View>
-            )}
-          </View>
-
-          <Text style={styles.vsText}>vs</Text>
-
-          <View style={styles.teamRow}>
-            <View style={styles.teamLogo}>
-              <Text style={styles.teamInitial}>
-                {item.team2_short_name?.[0] || item.team2_name?.[0] || 'T2'}
-              </Text>
-            </View>
-            <Text style={styles.teamName} numberOfLines={1}>
-              {item.team2_name || 'Team 2'}
-            </Text>
-            {item.team2_score && (
-              <View style={styles.scoreWithOvers}>
-                <Text style={styles.teamScore}>{item.team2_score}</Text>
-                {item.team2_over && (
-                  <Text style={styles.teamOvers}> {item.team2_over}</Text>
-                )}
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Match Info */}
-        <View style={styles.matchInfo}>
-          <Text style={styles.matchInfoText}>
-            {item.match_date || ''} {item.match_date && '•'} {item.ground_name || item.venue || (item.toss_details ? '' : 'TBD')}
-          </Text>
-          {item.match_no && (
-            <Text style={styles.matchNumber}>Match #{item.match_no}</Text>
-          )}
-          {item.toss_details && (
-            <Text style={styles.tossDetailsText} numberOfLines={1}>
-              {item.toss_details}
-            </Text>
-          )}
-        </View>
-
-        {/* Action Button */}
+        {/* START / VIEW Button (centered) */}
         <TouchableOpacity
           style={[
-            styles.actionButton,
-            isLive && styles.actionButtonLive,
+            styles.startButton,
+            isLive && styles.startButtonLive,
+            (statusUpper === 'COMPLETED' || statusUpper === 'END_OF_MATCH') &&
+              styles.startButtonCompleted,
           ]}
           onPress={() => handleFixturePress(item)}
+          activeOpacity={0.7}
         >
-          <Text style={styles.actionButtonText}>
-            {isLive || item.match_status === MATCH_STATUS.INNINGS_BREAK
-              ? 'VIEW'
-              : 'START'}
+          <Text style={styles.startButtonText}>
+            {getActionButtonText(matchStatus)}
           </Text>
         </TouchableOpacity>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderFilterTabs = () => (
-    <View style={styles.filterTabs}>
-      {['all', 'live', 'upcoming', 'completed'].map((status) => (
-        <TouchableOpacity
-          key={status}
-          style={[
-            styles.filterTab,
-            filterStatus === status && styles.filterTabActive,
-          ]}
-          onPress={() => dispatch(setFilterStatus(status))}
-        >
-          <Text
-            style={[
-              styles.filterTabText,
-              filterStatus === status && styles.filterTabTextActive,
-            ]}
-          >
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const renderTournamentSelector = () => (
-    <TouchableOpacity
-      style={styles.tournamentSelector}
-      onPress={() => setShowTournamentPicker(!showTournamentPicker)}
-    >
-      <Text style={styles.tournamentSelectorText}>
-        {selectedTournament?.name || 'Select Tournament'}
-      </Text>
-      <Text style={styles.dropdownIcon}>▼</Text>
-    </TouchableOpacity>
-  );
-
-  const renderTournamentPicker = () => {
-    if (!showTournamentPicker) return null;
-
-    return (
-      <View style={styles.tournamentPicker}>
-        {tournaments.map((tournament) => (
-          <TouchableOpacity
-            key={tournament.id}
-            style={[
-              styles.tournamentOption,
-              selectedTournament?.id === tournament.id &&
-                styles.tournamentOptionSelected,
-            ]}
-            onPress={() => handleTournamentSelect(tournament)}
-          >
-            <Text
-              style={[
-                styles.tournamentOptionText,
-                selectedTournament?.id === tournament.id &&
-                  styles.tournamentOptionTextSelected,
-              ]}
-            >
-              {tournament.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
     );
   };
 
-  if (loading && !refreshing && filteredFixtures.length === 0) {
+  // ─── Tabs: In Progress | Completed | Result ───
+
+  const renderTabs = () => (
+    <View style={styles.tabContainer}>
+      <TouchableOpacity
+        style={[
+          styles.tab,
+          activeTab === TABS.IN_PROGRESS && styles.tabActive,
+        ]}
+        onPress={() => setActiveTab(TABS.IN_PROGRESS)}
+        activeOpacity={0.7}
+      >
+        <Text
+          style={[
+            styles.tabText,
+            activeTab === TABS.IN_PROGRESS && styles.tabTextActive,
+          ]}
+        >
+          In Progress
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === TABS.COMPLETED && styles.tabActive]}
+        onPress={() => setActiveTab(TABS.COMPLETED)}
+        activeOpacity={0.7}
+      >
+        <Text
+          style={[
+            styles.tabText,
+            activeTab === TABS.COMPLETED && styles.tabTextActive,
+          ]}
+        >
+          Completed
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === TABS.RESULT && styles.tabActive]}
+        onPress={() => setActiveTab(TABS.RESULT)}
+        activeOpacity={0.7}
+      >
+        <Text
+          style={[
+            styles.tabText,
+            activeTab === TABS.RESULT && styles.tabTextActive,
+          ]}
+        >
+          Result
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // ─── Loading ───
+
+  if (loading && !refreshing && fixtures.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading fixtures...</Text>
+        <Text style={styles.loadingText}>Loading matches...</Text>
       </View>
     );
   }
 
+  // ─── Main Render ───
+
   return (
     <View style={styles.container}>
-      {/* Tournament Selector */}
-      {renderTournamentSelector()}
-      {renderTournamentPicker()}
+      {renderTabs()}
 
-      {/* Filter Tabs */}
-      {renderFilterTabs()}
-
-      {/* Unified Fixtures List (includes live matches) */}
       <FlatList
         data={displayFixtures}
         renderItem={renderFixtureCard}
-        keyExtractor={(item) => `${item.id || item.matchId}-${item.isLiveMatch ? 'live' : 'fixture'}`}
+        keyExtractor={(item, index) =>
+          `${item.id || item.matchId || item.match_id || index}`
+        }
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
             colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            {loadingLive ? (
-              <>
-                <ActivityIndicator size="small" color={COLORS.primary} />
-                <Text style={styles.emptyText}>Loading matches...</Text>
-              </>
-            ) : (
-              <Text style={styles.emptyText}>
-                {selectedTournament
-                  ? `No ${filterStatus === 'all' ? '' : filterStatus} matches found`
-                  : 'Please select a tournament'}
-              </Text>
-            )}
+            <MaterialCommunityIcons
+              name={
+                activeTab === TABS.RESULT
+                  ? 'trophy-outline'
+                  : activeTab === TABS.COMPLETED
+                  ? 'check-circle-outline'
+                  : 'cricket'
+              }
+              size={48}
+              color={COLORS.textSecondary}
+            />
+            <Text style={styles.emptyText}>
+              {activeTab === TABS.IN_PROGRESS
+                ? 'No matches in progress'
+                : activeTab === TABS.COMPLETED
+                ? 'No completed matches'
+                : 'No results yet'}
+            </Text>
+            <Text style={styles.emptySubText}>Pull down to refresh</Text>
           </View>
         }
+        showsVerticalScrollIndicator={false}
       />
+
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 };
 
+// ═══════════════════════════════════════════
+// STYLES — matching the shared image design
+// ═══════════════════════════════════════════
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#f8f8f8',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: '#f8f8f8',
   },
   loadingText: {
     marginTop: SPACING.md,
     color: COLORS.textSecondary,
-    fontSize: FONTS.sizes.md,
+    fontSize: 14,
   },
-  tournamentSelector: {
+
+  // ─── Tabs ───
+  tabContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    padding: SPACING.md,
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    ...SHADOWS.sm,
-  },
-  tournamentSelectorText: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.text,
-    fontWeight: '600',
-  },
-  dropdownIcon: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-  },
-  tournamentPicker: {
-    backgroundColor: COLORS.card,
-    marginHorizontal: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    ...SHADOWS.md,
-    maxHeight: 200,
-  },
-  tournamentOption: {
-    padding: SPACING.md,
+    backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  tournamentOptionSelected: {
-    backgroundColor: COLORS.primary + '20',
-  },
-  tournamentOptionText: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.text,
-  },
-  tournamentOptionTextSelected: {
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  filterTabs: {
-    flexDirection: 'row',
-    padding: SPACING.md,
-    backgroundColor: COLORS.card,
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-  },
-  filterTab: {
+  tab: {
     flex: 1,
-    paddingVertical: SPACING.sm,
+    paddingVertical: 14,
     alignItems: 'center',
-    borderRadius: BORDER_RADIUS.sm,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
   },
-  filterTabActive: {
-    backgroundColor: COLORS.primary,
+  tabActive: {
+    borderBottomColor: '#e67e22',
   },
-  filterTabText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+  tabText: {
+    fontSize: 15,
     fontWeight: '500',
-  },
-  filterTabTextActive: {
-    color: COLORS.white,
-  },
-  tournamentFilterButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.sm,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  tournamentFilterLabel: {
-    fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
-    fontWeight: '500',
   },
-  tournamentFilterValueContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  tournamentFilterValue: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.text,
-    fontWeight: '600',
-    marginRight: SPACING.xs,
-    maxWidth: '80%',
-  },
-  tournamentFilterPicker: {
-    backgroundColor: COLORS.card,
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.xs,
-    borderRadius: BORDER_RADIUS.md,
-    ...SHADOWS.md,
-    maxHeight: 300,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  tournamentFilterOption: {
-    padding: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  tournamentFilterOptionSelected: {
-    backgroundColor: COLORS.primary + '15',
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
-  },
-  tournamentFilterOptionText: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.text,
-    fontWeight: '500',
-  },
-  tournamentFilterOptionTextSelected: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  tournamentFilterOptionSubText: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  tournamentFilterOptionStatus: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textLight,
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-  selectedTournamentBadge: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary + '15',
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.sm,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.sm,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
-  },
-  selectedTournamentText: {
-    flex: 1,
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.primary,
+  tabTextActive: {
+    color: '#e67e22',
     fontWeight: '600',
   },
-  clearFilterButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  clearFilterText: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  orgFilterBadge: {
-    backgroundColor: COLORS.primary + '15',
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.sm,
-    padding: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
-  },
-  orgFilterText: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.primary,
-    fontWeight: '500',
-  },
+
+  // ─── List ───
   listContent: {
     padding: SPACING.md,
+    flexGrow: 1,
   },
-  fixtureCard: {
-    backgroundColor: COLORS.card,
+
+  // ─── Match Card ───
+  matchCard: {
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
-    ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.sm,
   },
-  fixtureCardLive: {
+  matchCardLive: {
     borderLeftWidth: 4,
-    borderLeftColor: COLORS.live,
-    backgroundColor: COLORS.live + '08', // Light tint for live matches
+    borderLeftColor: COLORS.live || '#28a745',
   },
-  matchSummaryText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.primary,
-    fontWeight: '600',
-    marginBottom: SPACING.xs,
-  },
-  scoreWithOvers: {
+  matchCardHeader: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
   },
-  teamOvers: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    marginLeft: SPACING.xs,
-  },
-  tossDetailsText: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textLight,
-    marginTop: SPACING.xs,
-    fontStyle: 'italic',
+  matchTournamentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    flex: 1,
+    marginRight: SPACING.sm,
   },
   statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
-    marginBottom: SPACING.md,
   },
-  statusText: {
+  statusBadgeText: {
     color: COLORS.white,
-    fontSize: FONTS.sizes.xs,
+    fontSize: 10,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
-  teamsContainer: {
-    marginBottom: SPACING.md,
+  matchVenueText: {
+    fontSize: 12,
+    color: '#d9534f',
+    marginBottom: SPACING.sm,
+    lineHeight: 18,
   },
-  teamRow: {
+  matchTypeText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  teamsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-  },
-  teamLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.md,
+    marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.sm,
   },
-  teamInitial: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+  teamLogo: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginHorizontal: 4,
   },
-  teamName: {
+  teamNameText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
     flex: 1,
-    fontSize: FONTS.sizes.md,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  teamScore: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    textAlign: 'center',
   },
   vsText: {
-    fontSize: FONTS.sizes.sm,
+    fontSize: 13,
     color: COLORS.textSecondary,
-    textAlign: 'center',
-    paddingVertical: SPACING.xs,
+    marginHorizontal: SPACING.md,
+    fontWeight: '400',
   },
-  matchInfo: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  matchInfoText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-  },
-  matchNumber: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textLight,
-    marginTop: SPACING.xs,
-  },
-  actionButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
+  scoresRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: SPACING.sm,
   },
-  actionButtonLive: {
-    backgroundColor: COLORS.live,
+  scoreText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
   },
-  actionButtonText: {
+  scoreSeparator: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginHorizontal: SPACING.sm,
+  },
+  matchSummaryText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  startButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 32,
+    borderRadius: BORDER_RADIUS.md,
+    alignSelf: 'center',
+  },
+  startButtonLive: {
+    backgroundColor: COLORS.live || '#28a745',
+  },
+  startButtonCompleted: {
+    backgroundColor: COLORS.completed || '#6c757d',
+  },
+  startButtonText: {
     color: COLORS.white,
-    fontSize: FONTS.sizes.md,
+    fontSize: 14,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
+
+  // ─── Empty ───
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: SPACING.xxl,
+    paddingVertical: 80,
   },
   emptyText: {
-    fontSize: FONTS.sizes.md,
+    fontSize: 15,
     color: COLORS.textSecondary,
+    marginTop: SPACING.md,
+    fontWeight: '500',
   },
-  // Live Matches Styles
-  liveMatchesSection: {
-    marginBottom: SPACING.lg,
-  },
-  liveMatchesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  liveIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.live,
-    marginRight: SPACING.sm,
-  },
-  liveMatchesTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  liveMatchesCount: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
-    marginLeft: SPACING.xs,
-  },
-  liveMatchCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.live,
-    ...SHADOWS.md,
-  },
-  liveTeamRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  liveTeamName: {
-    flex: 1,
-    fontSize: FONTS.sizes.md,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginRight: SPACING.md,
-  },
-  liveScoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  liveScore: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginRight: SPACING.xs,
-  },
-  liveOvers: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-  },
-  liveMatchSummary: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+  emptySubText: {
+    fontSize: 12,
+    color: COLORS.textLight,
     marginTop: SPACING.xs,
-    marginBottom: SPACING.sm,
   },
-  liveBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.live + '20',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
+
+  // ─── Error ───
+  errorBanner: {
+    backgroundColor: COLORS.danger,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
-  liveBadgeText: {
-    fontSize: FONTS.sizes.xs,
-    fontWeight: '700',
-    color: COLORS.live,
-  },
-  loadingLiveContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
-    backgroundColor: COLORS.card,
-    borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.md,
-  },
-  loadingLiveText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    marginLeft: SPACING.sm,
+  errorText: {
+    color: COLORS.white,
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
 

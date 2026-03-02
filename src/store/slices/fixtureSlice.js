@@ -63,6 +63,20 @@ export const fetchFixtures = createAsyncThunk(
   }
 );
 
+export const fetchFixturesV2 = createAsyncThunk(
+  'fixture/fetchFixturesV2',
+  async (tournamentId, { rejectWithValue }) => {
+    try {
+      console.log('🔍 Fetching V2 fixtures for tournament:', tournamentId);
+      const response = await fixtureService.getFixtureListV2(tournamentId);
+      return { tournamentId, fixtures: response };
+    } catch (error) {
+      console.error('❌ V2 Fixture fetch error:', error);
+      return rejectWithValue(error.message || 'Failed to fetch fixtures');
+    }
+  }
+);
+
 export const fetchWicketTypes = createAsyncThunk(
   'fixture/fetchWicketTypes',
   async (tournamentId, { rejectWithValue }) => {
@@ -144,6 +158,19 @@ const fixtureSlice = createSlice({
         state.fixtures = action.payload.fixtures || [];
       })
       .addCase(fetchFixtures.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Fetch Fixtures V2
+      .addCase(fetchFixturesV2.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchFixturesV2.fulfilled, (state, action) => {
+        state.loading = false;
+        state.fixtures = action.payload.fixtures || [];
+      })
+      .addCase(fetchFixturesV2.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

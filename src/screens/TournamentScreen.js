@@ -7,64 +7,29 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
-  Image,
-  Linking,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { fetchTournamentsByOrg, fetchTournaments } from '../store/slices/fixtureSlice';
+import { fetchTournaments, setSelectedTournament } from '../store/slices/fixtureSlice';
 import { COLORS, SPACING, FONTS, BORDER_RADIUS, SHADOWS } from '../constants';
 
 const TournamentScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { tournaments, loading, error } = useSelector((state) => state.fixture);
-  const { user } = useSelector((state) => state.auth);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Load all tournaments directly — no org filter
   const loadTournaments = async () => {
     try {
-      if (user?.orgId) {
-        console.log('🏆 Loading tournaments for orgId:', user.orgId);
-        await dispatch(fetchTournamentsByOrg(user.orgId)).unwrap();
-        console.log('✅ Tournaments loaded successfully (org-specific)');
-      } else {
-        console.warn('⚠️ No orgId found, loading all tournaments');
-        await dispatch(fetchTournaments()).unwrap();
-        console.log('✅ Tournaments loaded successfully (all tournaments)');
-      }
+      await dispatch(fetchTournaments()).unwrap();
     } catch (err) {
       console.error('❌ Error loading tournaments:', err);
-      // If org-specific fails, try loading all tournaments as fallback
-      if (user?.orgId) {
-        console.log('🔄 Retrying with all tournaments...');
-        try {
-          await dispatch(fetchTournaments()).unwrap();
-          console.log('✅ Fallback successful - loaded all tournaments');
-        } catch (fallbackErr) {
-          console.error('❌ Fallback also failed:', fallbackErr);
-        }
-      }
     }
   };
 
   useEffect(() => {
-    console.log('🎬 TournamentScreen mounted/updated');
-    console.log('   User:', user?.username || 'Not logged in');
-    console.log('   OrgId:', user?.orgId || 'No orgId');
     loadTournaments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.orgId]); // Reload when orgId changes
-
-  // Log when tournaments state changes
-  useEffect(() => {
-    console.log('🔄 Tournaments state changed:');
-    console.log('   Count:', tournaments?.length || 0);
-    console.log('   Loading:', loading);
-    console.log('   Error:', error);
-    if (tournaments && tournaments.length > 0) {
-      console.log('   Sample:', tournaments[0]);
-    }
-  }, [tournaments, loading, error]);
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -74,126 +39,107 @@ const TournamentScreen = ({ navigation }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).replace(',', '');
-  };
-
-  const handleWhatsAppPress = (tournament) => {
-    const message = `Check out ${tournament.tourName || 'this tournament'}!`;
-    const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          return Linking.openURL(url);
-        } else {
-          console.log('WhatsApp is not installed');
-        }
-      })
-      .catch((err) => console.error('Error opening WhatsApp:', err));
+    try {
+      const date = new Date(dateString);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    } catch {
+      return dateString;
+    }
   };
 
   const handleTournamentPress = (tournament) => {
-    console.log('📋 Tournament selected:', tournament.tourName);
-    // TODO: Navigate to tournament details screen
+    const name = tournament.tour_name || tournament.tourName || tournament.name || 'Tournament';
+    const id = tournament.tour_id || tournament.id;
+    dispatch(setSelectedTournament(tournament));
+    navigation.navigate('FixturesList', {
+      tournament,
+      tournamentId: id,
+      tournamentName: name,
+    });
   };
 
   const renderTournamentItem = ({ item }) => {
-    const logoUri = item.logo || item.tourImage;
-    const tournamentName = item.tourName || item.name || 'Unnamed Tournament';
-    const startDate = item.tourStartAt || item.startDate;
+    const tournamentName = item.tour_name || item.tourName || item.name || 'Unnamed Tournament';
+    const shortName = item.short_name || '';
+    const organizer = item.organizer_name || '';
+    const location = item.location || '';
+    const startDate = item.start_date || item.tourStartAt || item.startDate;
+    const endDate = item.end_date;
+    const description = item.tour_desc || '';
+
+    // Date range line
+    const dateLine = [
+      startDate ? formatDate(startDate) : '',
+      endDate ? formatDate(endDate) : '',
+    ].filter(Boolean).join(' - ');
+
+    // Info line: location + organizer
+    const infoLine = [location, organizer].filter(Boolean).join('  •  ');
 
     return (
       <TouchableOpacity
-        style={styles.tournamentCard}
+        style={styles.card}
         onPress={() => handleTournamentPress(item)}
         activeOpacity={0.7}
       >
-        {/* Tournament Logo */}
-        <View style={styles.logoContainer}>
-          {logoUri ? (
-            <Image
-              source={{ uri: logoUri }}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          ) : (
-            <View style={styles.logoPlaceholder}>
-              <MaterialCommunityIcons
-                name="cricket"
-                size={32}
-                color={COLORS.primary}
-              />
-            </View>
-          )}
-        </View>
-
-        {/* Tournament Info */}
-        <View style={styles.infoContainer}>
+        {/* Row 1: Name + Short Name badge */}
+        <View style={styles.cardHeader}>
           <Text style={styles.tournamentName} numberOfLines={2}>
             {tournamentName}
           </Text>
-          <Text style={styles.tournamentDate}>
-            {formatDate(startDate)}
-          </Text>
+          {shortName ? (
+            <View style={styles.shortNameBadge}>
+              <Text style={styles.shortNameText}>{shortName}</Text>
+            </View>
+          ) : null}
         </View>
 
-        {/* Action Icons */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={styles.whatsappButton}
-            onPress={() => handleWhatsAppPress(item)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
-          </TouchableOpacity>
+        {/* Row 2: Date range */}
+        {dateLine ? (
+          <Text style={styles.dateText}>{dateLine}</Text>
+        ) : null}
 
-          <Ionicons
-            name="chevron-forward"
-            size={24}
-            color={COLORS.textSecondary}
-            style={styles.chevronIcon}
-          />
+        {/* Row 3: Location + Organizer */}
+        {infoLine ? (
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={14} color="#999" style={{ marginRight: 4 }} />
+            <Text style={styles.infoText} numberOfLines={1}>{infoLine}</Text>
+          </View>
+        ) : null}
+
+        {/* Row 4: Description if available */}
+        {description ? (
+          <Text style={styles.descText} numberOfLines={1}>{description}</Text>
+        ) : null}
+
+        {/* View Matches button */}
+        <View style={styles.viewMatchesRow}>
+          <TouchableOpacity
+            style={styles.viewMatchesBtn}
+            onPress={() => handleTournamentPress(item)}
+          >
+            <Text style={styles.viewMatchesBtnText}>VIEW MATCHES</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
   };
 
-  const renderEmptyState = () => {
-    console.log('📭 Rendering empty state - Debug info:');
-    console.log('   User:', user?.username || 'Not logged in');
-    console.log('   orgId:', user?.orgId || 'No orgId');
-    console.log('   Tournaments count:', tournaments?.length || 0);
-    console.log('   Loading:', loading);
-    console.log('   Error:', error);
-    
-    return (
-      <View style={styles.emptyContainer}>
-        <MaterialCommunityIcons
-          name="trophy-outline"
-          size={64}
-          color={COLORS.textSecondary}
-        />
-        <Text style={styles.emptyText}>No tournaments available</Text>
-        <Text style={styles.emptySubText}>
-          {user?.orgId
-            ? `Looking for tournaments in organization ${user.orgId}...`
-            : 'Showing all available tournaments'}
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <MaterialCommunityIcons name="trophy-outline" size={64} color="#ccc" />
+      <Text style={styles.emptyText}>No tournaments available</Text>
+      <Text style={styles.emptySubText}>Pull down to refresh</Text>
+      {error && (
+        <Text style={[styles.emptySubText, { color: '#dc3545', marginTop: 12 }]}>
+          {error}
         </Text>
-        {error && (
-          <Text style={[styles.emptySubText, { color: COLORS.danger, marginTop: SPACING.md }]}>
-            Error: {error}
-          </Text>
-        )}
-      </View>
-    );
-  };
+      )}
+    </View>
+  );
 
   if (loading && !refreshing && tournaments.length === 0) {
     return (
@@ -206,19 +152,10 @@ const TournamentScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tournaments</Text>
-        <Text style={styles.headerSubtitle}>
-          {tournaments.length} tournament{tournaments.length !== 1 ? 's' : ''} available
-        </Text>
-      </View>
-
-      {/* Tournament List */}
       <FlatList
         data={tournaments}
         renderItem={renderTournamentItem}
-        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+        keyExtractor={(item) => (item.tour_id || item.id)?.toString() || Math.random().toString()}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
@@ -231,12 +168,6 @@ const TournamentScreen = ({ navigation }) => {
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
       />
-
-      {error && (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>⚠️ {error}</Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -244,128 +175,115 @@ const TournamentScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: '#f5f5f5',
   },
   loadingText: {
-    marginTop: SPACING.md,
-    fontSize: FONTS.md,
-    color: COLORS.textSecondary,
-  },
-  header: {
-    backgroundColor: COLORS.card,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    ...SHADOWS.sm,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    marginTop: 12,
+    fontSize: 14,
+    color: '#999',
   },
   listContent: {
-    paddingVertical: SPACING.sm,
+    paddingVertical: 8,
     flexGrow: 1,
   },
-  tournamentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    marginHorizontal: SPACING.md,
-    marginVertical: SPACING.xs,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
+  // ─── Card ───
+  card: {
+    backgroundColor: '#fff',
+    marginHorizontal: 14,
+    marginVertical: 6,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#e0e0e0',
+    padding: 14,
     ...SHADOWS.sm,
   },
-  logoContainer: {
-    width: 60,
-    height: 60,
-    marginRight: SPACING.md,
-  },
-  logo: {
-    width: '100%',
-    height: '100%',
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  logoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  infoContainer: {
-    flex: 1,
-    marginRight: SPACING.sm,
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
   tournamentName: {
-    fontSize: FONTS.md,
-    fontWeight: '600',
-    color: COLORS.text,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333',
+    marginRight: 8,
+  },
+  shortNameBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  shortNameText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#c0392b',
     marginBottom: 4,
+    fontWeight: '500',
   },
-  tournamentDate: {
-    fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
-  },
-  actionsContainer: {
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 4,
   },
-  whatsappButton: {
-    marginRight: SPACING.sm,
+  infoText: {
+    fontSize: 12,
+    color: '#777',
+    flex: 1,
   },
-  chevronIcon: {
-    marginLeft: SPACING.xs,
+  descText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    marginBottom: 4,
   },
+  viewMatchesRow: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  viewMatchesBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 28,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  viewMatchesBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  // ─── Empty ───
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: 32,
     paddingTop: 100,
   },
   emptyText: {
-    fontSize: FONTS.lg,
+    fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
-    marginTop: SPACING.md,
+    color: '#333',
+    marginTop: 12,
   },
   emptySubText: {
-    fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
-    textAlign: 'center',
-  },
-  errorBanner: {
-    backgroundColor: COLORS.danger,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  errorText: {
-    color: COLORS.white,
-    fontSize: FONTS.sm,
+    fontSize: 12,
+    color: '#999',
+    marginTop: 6,
     textAlign: 'center',
   },
 });

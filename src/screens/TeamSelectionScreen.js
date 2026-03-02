@@ -30,39 +30,41 @@ const TeamSelectionScreen = ({ navigation, route }) => {
   const teamWK = wicketKeeper[teamKey];
   const maxPlayers = settings.player_count || 11;
 
-  const isSelected = (playerId) => selected.some((p) => p.id === playerId);
+  const getPlayerId = (p) => p.id || p.player_id;
+  const isSelected = (playerId) => selected.some((p) => getPlayerId(p) === playerId);
 
   const handlePlayerToggle = (player) => {
-    if (isSelected(player.id)) {
-      dispatch(removePlayerFromSquad({ team: teamKey, playerId: player.id }));
+    const pid = getPlayerId(player);
+    if (isSelected(pid)) {
+      dispatch(removePlayerFromSquad({ team: teamKey, playerId: pid }));
       // Remove captain/WK if removed from squad
-      if (teamCaptain === player.id) {
+      if (teamCaptain === pid) {
         dispatch(setCaptain({ team: teamKey, playerId: null }));
       }
-      if (teamWK === player.id) {
+      if (teamWK === pid) {
         dispatch(setWicketKeeper({ team: teamKey, playerId: null }));
       }
     } else if (selected.length < maxPlayers) {
-      dispatch(addPlayerToSquad({ team: teamKey, player }));
+      dispatch(addPlayerToSquad({ team: teamKey, player: { ...player, id: pid, name: player.name || player.player_name } }));
     }
   };
 
-  const handleCaptainToggle = (playerId) => {
-    if (!isSelected(playerId)) return;
+  const handleCaptainToggle = (pid) => {
+    if (!isSelected(pid)) return;
     dispatch(
       setCaptain({
         team: teamKey,
-        playerId: teamCaptain === playerId ? null : playerId,
+        playerId: teamCaptain === pid ? null : pid,
       })
     );
   };
 
-  const handleWKToggle = (playerId) => {
-    if (!isSelected(playerId)) return;
+  const handleWKToggle = (pid) => {
+    if (!isSelected(pid)) return;
     dispatch(
       setWicketKeeper({
         team: teamKey,
-        playerId: teamWK === playerId ? null : playerId,
+        playerId: teamWK === pid ? null : pid,
       })
     );
   };
@@ -78,9 +80,10 @@ const TeamSelectionScreen = ({ navigation, route }) => {
   };
 
   const renderPlayerCard = ({ item }) => {
-    const playerSelected = isSelected(item.id);
-    const isCaptain = teamCaptain === item.id;
-    const isWK = teamWK === item.id;
+    const pid = getPlayerId(item);
+    const playerSelected = isSelected(pid);
+    const isCaptain = teamCaptain === pid;
+    const isWK = teamWK === pid;
 
     return (
       <TouchableOpacity
@@ -117,7 +120,7 @@ const TeamSelectionScreen = ({ navigation, route }) => {
           <View style={styles.badgesContainer}>
             <TouchableOpacity
               style={[styles.badge, isCaptain && styles.badgeActive]}
-              onPress={() => handleCaptainToggle(item.id)}
+              onPress={() => handleCaptainToggle(pid)}
             >
               <Text
                 style={[
@@ -130,7 +133,7 @@ const TeamSelectionScreen = ({ navigation, route }) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.badge, isWK && styles.badgeActive]}
-              onPress={() => handleWKToggle(item.id)}
+              onPress={() => handleWKToggle(pid)}
             >
               <Text
                 style={[styles.badgeText, isWK && styles.badgeTextActive]}
@@ -165,7 +168,7 @@ const TeamSelectionScreen = ({ navigation, route }) => {
         <FlatList
           data={players}
           renderItem={renderPlayerCard}
-          keyExtractor={(item) => item.id?.toString() || item.player_id?.toString()}
+          keyExtractor={(item) => (item.id || item.player_id)?.toString()}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>

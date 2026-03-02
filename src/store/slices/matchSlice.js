@@ -53,10 +53,39 @@ export const updateMatchSettings = createAsyncThunk(
 
 export const fetchTourSquad = createAsyncThunk(
   'match/fetchTourSquad',
-  async (matchId, { rejectWithValue }) => {
+  async (matchId, { rejectWithValue, getState }) => {
     try {
       const response = await matchService.getTourSquad(matchId);
-      return response;
+      // API returns data keyed by team ID, e.g. { "89": [...], "94": [...] }
+      // Map to team1/team2 using match data
+      const match = getState().match.match;
+      const teamId1 = match?.team_id1 ?? match?.team1_id;
+      const teamId2 = match?.team_id2 ?? match?.team2_id;
+
+      const normalizePlayer = (p) => ({
+        ...p,
+        id: p.player_id || p.id,
+        name: p.player_name || p.name,
+      });
+
+      const keys = Object.keys(response || {});
+      let team1Players = [];
+      let team2Players = [];
+
+      if (teamId1 && response[String(teamId1)]) {
+        team1Players = response[String(teamId1)].map(normalizePlayer);
+      }
+      if (teamId2 && response[String(teamId2)]) {
+        team2Players = response[String(teamId2)].map(normalizePlayer);
+      }
+
+      // Fallback: if match data missing, assign first two keys
+      if (!team1Players.length && !team2Players.length && keys.length >= 2) {
+        team1Players = (response[keys[0]] || []).map(normalizePlayer);
+        team2Players = (response[keys[1]] || []).map(normalizePlayer);
+      }
+
+      return { team1: team1Players, team2: team2Players };
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to fetch squad');
     }
@@ -133,14 +162,15 @@ const matchSlice = createSlice({
     },
     addPlayerToSquad: (state, action) => {
       const { team, player } = action.payload;
-      if (!state.selectedSquad[team].find(p => p.id === player.id)) {
+      const pid = player.id || player.player_id;
+      if (!state.selectedSquad[team].find(p => (p.id || p.player_id) === pid)) {
         state.selectedSquad[team].push(player);
       }
     },
     removePlayerFromSquad: (state, action) => {
       const { team, playerId } = action.payload;
       state.selectedSquad[team] = state.selectedSquad[team].filter(
-        p => p.id !== playerId
+        p => (p.id || p.player_id) !== playerId
       );
     },
     setCaptain: (state, action) => {
@@ -236,7 +266,8 @@ const matchSlice = createSlice({
       // Save Team Squad
       .addCase(saveTeamSquad.fulfilled, (state, action) => {
         const { teamId, squadData } = action.payload;
-        const teamKey = state.match?.team1_id === teamId ? 'team1' : 'team2';
+        const id1 = state.match?.team_id1 ?? state.match?.team1_id;
+        const teamKey = id1 == teamId ? 'team1' : 'team2';
         state.selectedSquad[teamKey] = squadData.players || [];
       })
       // Save Toss
@@ -266,11 +297,13 @@ export const selectBattingTeam = (state) => {
   const { toss, match } = state.match;
   if (!toss.completed || !match) return null;
   
+  const id1 = match.team_id1 ?? match.team1_id;
+  const id2 = match.team_id2 ?? match.team2_id;
   if (toss.elected === 'bat') {
     return toss.winner;
   }
   // If elected to bowl, other team bats
-  return toss.winner === match.team1_id ? match.team2_id : match.team1_id;
+  return toss.winner === id1 ? id2 : id1;
 };
 
 export const {

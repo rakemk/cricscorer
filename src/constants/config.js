@@ -7,111 +7,90 @@ import { Platform } from 'react-native';
 
 // API Server URLs for different environments
 const API_URLS = {
-  // Production API - Real cric-scorer-ui API (Swagger on port 8088)
-  production: 'http://139.59.17.31:8088/api',
+  // ProCric8 Live API - All endpoints (auth, tournament, fixture, match, scoring)
+  production: 'http://api.procric8.com/public/index.php/api',
   
   // Local development server
-  // For Android Emulator, use 10.0.2.2 to access host machine's localhost
-  // For iOS Simulator, use localhost
-  // For physical device, use your computer's IP address (e.g., 192.168.1.10)
   development: Platform.select({
-    android: 'http://10.0.2.2:8081/api', // Android Emulator -> Host localhost:8081
-    ios: 'http://localhost:8081/api',    // iOS Simulator -> localhost:8081
+    android: 'http://10.0.2.2:8081/api',
+    ios: 'http://localhost:8081/api',
     default: 'http://localhost:8081/api',
   }),
   
   // Mock/Test Mode (no backend needed - for testing UI only)
-  mock: 'http://mock-api', // Will use mock data
+  mock: 'http://mock-api',
 };
 
 // Current environment - Change this to switch between environments
 // Options: 'production', 'development', 'mock'
-// ✅ USING PRODUCTION API - Real cric-scorer-ui API server
+// ✅ USING ProCric8 LIVE API
 const CURRENT_ENV = 'production';
 
 export const API_CONFIG = {
   BASE_URL: API_URLS[CURRENT_ENV],
-  API_VERSION: 'v1',
+  ASSET_BASE_URL: 'http://api.procric8.com/public/index.php/',
+  API_VERSION: 'v2',
   TIMEOUT: 30000,
   DEBUG: true, // Set to false in production
   CURRENT_ENV,
-  USE_MOCK: CURRENT_ENV === 'mock', // Enable mock mode
+  USE_MOCK: CURRENT_ENV === 'mock',
 };
 
 // Endpoints matching cric-scorer-ui API
 export const ENDPOINTS = {
-  // Authentication
+  // Authentication (ProCric8 scorer login)
   AUTH: {
-    // Identity verification
-    VERIFY_IDENTITY: (identity) => `/v1/auth/identity/${identity}/verify`,
-    
-    // Registration & Password
-    REGISTER: '/v1/auth/register',
-    SET_PASSCODE: (identity, otp) => `/v1/auth/set/passcode/${identity}/${otp}`,
-    
-    // Login
-    LOGIN: '/v1/auth/login',
-    LOGIN_OTP: (uuid) => `/v1/auth/login/${uuid}/otp`,
-    VERIFY_LOGIN_OTP: (uuid, otp) => `/v1/auth/login/${uuid}/verify/${otp}`,
-    
-    // Forgot Password
-    FORGOT_PASSWORD: (identity) => `/v1/auth/forgot/${identity}/generate`,
-    
-    // Token refresh
-    REFRESH: '/v1/auth/refresh',
+    // Single scorer login endpoint — POST {username, password}
+    SCORER_LOGIN: '/v2/auth/scorer',
+    REFRESH: '/v2/auth/refresh',
   },
 
-  // Tournament & Fixtures
+  // Tournament & Fixtures (ProCric8 V2 API)
   TOURNAMENT: {
-    // Tournament endpoints (based on cric-scorer-ui using /v1 instead of /v2)
-    LIST: '/v1/scorer/tournament/list',
-    LIVE_TOURNAMENTS: '/v1/scorer/tournaments/live',
-    BY_ORG: (orgId) => `/v1/org/${orgId}/tour`, // Get all tournaments by organization
-    CREATE: '/v1/scorer/tournament',
-    UPDATE: (tourId) => `/v1/scorer/tournament/${tourId}`,
-    DELETE: (tourId) => `/v1/scorer/tournament/${tourId}`,
-    
-    // Legacy endpoints (if needed)
-    FIXTURE_LIST: (tournamentId) => `/v1/scorer/tournament/${tournamentId}/fixture/list`,
-    WICKET_LIST: (tournamentId) => `/v1/scorer/tournament/${tournamentId}/wicket/list`,
+    LIST: '/v2/scorer/tournament/list',
+    LIVE_TOURNAMENTS: '/v2/scorer/tournaments/live',
+    BY_ORG: (orgId) => `/v2/org/${orgId}/tour`,
+    CREATE: '/v2/scorer/tournament',
+    UPDATE: (tourId) => `/v2/scorer/tournament/${tourId}`,
+    DELETE: (tourId) => `/v2/scorer/tournament/${tourId}`,
+    FIXTURE_LIST: (tournamentId) => `/v2/scorer/tournament/${tournamentId}/fixture/list`,
+    WICKET_LIST: (tournamentId) => `/v2/scorer/tournament/${tournamentId}/wicket/list`,
   },
 
   // Live Matches
   LIVE_MATCHES: {
-    // Get all live matches with details
-    LIST: '/v1/scorer/live-matches/details',
+    LIST: '/v2/scorer/live-matches/details',
   },
 
   // Match Operations
   MATCH: {
-    GET: (matchId) => `/v1/scorer/match/${matchId}`,
-    PREINFO: (matchId) => `/v1/scorer/match/${matchId}/preinfo`,
-    TOUR_SQUAD: (matchId) => `/v1/scorer/match/${matchId}/toursquad`,
-    TEAM_SQUAD: (matchId, teamId) => `/v1/scorer/match/${matchId}/team/${teamId}/squad`,
-    SETTING: (matchId) => `/v1/scorer/match/${matchId}/setting`,
-    INNINGS: (matchId) => `/v1/scorer/match/${matchId}/innings`,
-    BALL_DATA: (matchId) => `/v1/scorer/match/${matchId}/balldata`,
-    BALL_DATA_INNINGS: (matchId, innings) => `/v1/scorer/match/${matchId}/balldata/${innings}`,
-    DELETE: (matchId) => `/v1/scorer/match/${matchId}`,
-    // Match Score - Comprehensive live score data for viewing  
-    SCORE: (matchId) => `/v1/scorer/match/${matchId}/score`,
+    GET: (matchId) => `/v2/scorer/match/${matchId}`,
+    PREINFO: (matchId) => `/v2/scorer/match/${matchId}/preinfo`,
+    TOUR_SQUAD: (matchId) => `/v2/scorer/match/${matchId}/toursquad`,
+    TEAM_SQUAD: (matchId, teamId) => `/v2/scorer/match/${matchId}/team/${teamId}/squad`,
+    SETTING: (matchId) => `/v2/scorer/match/${matchId}/setting`,
+    INNINGS: (matchId) => `/v2/scorer/match/${matchId}/innings`,
+    BALL_DATA: (matchId) => `/v2/scorer/match/${matchId}/balldata`,
+    BALL_DATA_INNINGS: (matchId, innings) => `/v2/scorer/match/${matchId}/balldata/${innings}`,
+    DELETE: (matchId) => `/v2/scorer/match/${matchId}`,
+    SCORE: (matchId) => `/v2/scorer/match/${matchId}/score`,
   },
 
   // Live Scoring
   SCORING: {
-    LIVE_SCORE: (matchId) => `/v1/scorer/match/${matchId}/livescore`,
-    LIVE_INFO: (matchId) => `/v1/scorer/match/${matchId}/liveinfo`,
-    UNDO_TICK: (matchId, transId) => `/v1/scorer/match/${matchId}/undotick/${transId}`,
-    BULK_UNDO: (matchId) => `/v1/scorer/match/${matchId}/bulk/undotick`,
-    BULK_TICK: (matchId) => `/v1/scorer/match/${matchId}/bulk/tick`,
-    RESET_TICKS: (matchId) => `/v1/scorer/match/${matchId}/reset/ticks`,
+    LIVE_SCORE: (matchId) => `/v2/scorer/match/${matchId}/livescore`,
+    LIVE_INFO: (matchId) => `/v2/scorer/match/${matchId}/liveinfo`,
+    UNDO_TICK: (matchId, transId) => `/v2/scorer/match/${matchId}/undotick/${transId}`,
+    BULK_UNDO: (matchId) => `/v2/scorer/match/${matchId}/bulk/undotick`,
+    BULK_TICK: (matchId) => `/v2/scorer/match/${matchId}/bulk/tick`,
+    RESET_TICKS: (matchId) => `/v2/scorer/match/${matchId}/reset/ticks`,
   },
 
   // Post Match
   POST_MATCH: {
-    POST_INFO: (matchId) => `/v1/scorer/match/${matchId}/postinfo`,
-    FAIR_PLAY: (matchId) => `/v1/scorer/match/${matchId}/fairplay`,
-    POM_SUGGESTION: (matchId) => `/v1/scorer/match/${matchId}/pom/sugestion`,
+    POST_INFO: (matchId) => `/v2/scorer/match/${matchId}/postinfo`,
+    FAIR_PLAY: (matchId) => `/v2/scorer/match/${matchId}/fairplay`,
+    POM_SUGGESTION: (matchId) => `/v2/scorer/match/${matchId}/pom/sugestion`,
   },
 };
 
